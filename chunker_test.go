@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/restic/chunker"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func parseDigest(s string) []byte {
@@ -185,7 +185,7 @@ func TestChunkerWithRandomPolynomial(t *testing.T) {
 	// generate a new random polynomial
 	start := time.Now()
 	p, err := chunker.RandomPolynomial()
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	t.Logf("generating random polynomial took %v", time.Since(start))
 
 	start = time.Now()
@@ -195,13 +195,13 @@ func TestChunkerWithRandomPolynomial(t *testing.T) {
 	// make sure that first chunk is different
 	c, err := ch.Next()
 
-	assert.NotEqual(t, c.Cut, chunks1[0].CutFP,
+	require.NotEqual(t, c.Cut, chunks1[0].CutFP,
 		"Cut point is the same")
 
-	assert.NotEqual(t, c.Length, chunks1[0].Length,
+	require.NotEqual(t, c.Length, chunks1[0].Length,
 		"Length is the same")
 
-	assert.True(t, !bytes.Equal(c.Digest, chunks1[0].Digest),
+	require.True(t, !bytes.Equal(c.Digest, chunks1[0].Digest),
 		"Digest is the same")
 }
 
@@ -290,7 +290,7 @@ func BenchmarkChunker(b *testing.B) {
 
 func BenchmarkNewChunker(b *testing.B) {
 	p, err := chunker.RandomPolynomial()
-	assert.Nil(b, err)
+	require.Nil(b, err)
 
 	b.ResetTimer()
 
