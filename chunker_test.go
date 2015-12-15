@@ -1,4 +1,4 @@
-package chunker_test
+package chunker
 
 import (
 	"bytes"
@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/restic/chunker"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,7 +31,7 @@ type chunk struct {
 }
 
 // polynomial used for all the tests below
-const testPol = chunker.Pol(0x3DA3358B4DC173)
+const testPol = Pol(0x3DA3358B4DC173)
 
 // created for 32MB of random data out of math/rand's Uint32() seeded by
 // constant 23
@@ -68,14 +67,14 @@ var chunks1 = []chunk{
 
 // test if nullbytes are correctly split, even if length is a multiple of MinSize.
 var chunks2 = []chunk{
-	chunk{chunker.MinSize, 0, parseDigest("07854d2fef297a06ba81685e660c332de36d5d18d546927d30daad6d7fda1541")},
-	chunk{chunker.MinSize, 0, parseDigest("07854d2fef297a06ba81685e660c332de36d5d18d546927d30daad6d7fda1541")},
-	chunk{chunker.MinSize, 0, parseDigest("07854d2fef297a06ba81685e660c332de36d5d18d546927d30daad6d7fda1541")},
-	chunk{chunker.MinSize, 0, parseDigest("07854d2fef297a06ba81685e660c332de36d5d18d546927d30daad6d7fda1541")},
+	chunk{MinSize, 0, parseDigest("07854d2fef297a06ba81685e660c332de36d5d18d546927d30daad6d7fda1541")},
+	chunk{MinSize, 0, parseDigest("07854d2fef297a06ba81685e660c332de36d5d18d546927d30daad6d7fda1541")},
+	chunk{MinSize, 0, parseDigest("07854d2fef297a06ba81685e660c332de36d5d18d546927d30daad6d7fda1541")},
+	chunk{MinSize, 0, parseDigest("07854d2fef297a06ba81685e660c332de36d5d18d546927d30daad6d7fda1541")},
 }
 
-func testWithData(t *testing.T, chnker *chunker.Chunker, testChunks []chunk) []*chunker.Chunk {
-	chunks := []*chunker.Chunk{}
+func testWithData(t *testing.T, chnker *Chunker, testChunks []chunk) []*Chunk {
+	chunks := []*Chunk{}
 
 	pos := uint(0)
 	for i, chunk := range testChunks {
@@ -146,7 +145,7 @@ func getRandom(seed, count int) []byte {
 func TestChunker(t *testing.T) {
 	// setup data source
 	buf := getRandom(23, 32*1024*1024)
-	ch := chunker.New(bytes.NewReader(buf), testPol, sha256.New())
+	ch := New(bytes.NewReader(buf), testPol, sha256.New())
 	chunks := testWithData(t, ch, chunks1)
 
 	// test reader
@@ -172,8 +171,8 @@ func TestChunker(t *testing.T) {
 	}
 
 	// setup nullbyte data source
-	buf = bytes.Repeat([]byte{0}, len(chunks2)*chunker.MinSize)
-	ch = chunker.New(bytes.NewReader(buf), testPol, sha256.New())
+	buf = bytes.Repeat([]byte{0}, len(chunks2)*MinSize)
+	ch = New(bytes.NewReader(buf), testPol, sha256.New())
 
 	testWithData(t, ch, chunks2)
 }
@@ -184,12 +183,12 @@ func TestChunkerWithRandomPolynomial(t *testing.T) {
 
 	// generate a new random polynomial
 	start := time.Now()
-	p, err := chunker.RandomPolynomial()
+	p, err := RandomPolynomial()
 	require.Nil(t, err)
 	t.Logf("generating random polynomial took %v", time.Since(start))
 
 	start = time.Now()
-	ch := chunker.New(bytes.NewReader(buf), p, sha256.New())
+	ch := New(bytes.NewReader(buf), p, sha256.New())
 	t.Logf("creating chunker took %v", time.Since(start))
 
 	// make sure that first chunk is different
@@ -209,7 +208,7 @@ func TestChunkerWithoutHash(t *testing.T) {
 	// setup data source
 	buf := getRandom(23, 32*1024*1024)
 
-	ch := chunker.New(bytes.NewReader(buf), testPol, nil)
+	ch := New(bytes.NewReader(buf), testPol, nil)
 	chunks := testWithData(t, ch, chunks1)
 
 	// test reader
@@ -238,8 +237,8 @@ func TestChunkerWithoutHash(t *testing.T) {
 	}
 
 	// setup nullbyte data source
-	buf = bytes.Repeat([]byte{0}, len(chunks2)*chunker.MinSize)
-	ch = chunker.New(bytes.NewReader(buf), testPol, sha256.New())
+	buf = bytes.Repeat([]byte{0}, len(chunks2)*MinSize)
+	ch = New(bytes.NewReader(buf), testPol, sha256.New())
 
 	testWithData(t, ch, chunks2)
 }
@@ -256,7 +255,7 @@ func benchmarkChunker(b *testing.B, hash hash.Hash) {
 		chunks = 0
 
 		rd.Seek(0, 0)
-		ch := chunker.New(rd, testPol, hash)
+		ch := New(rd, testPol, hash)
 
 		for {
 			_, err := ch.Next()
@@ -289,12 +288,12 @@ func BenchmarkChunker(b *testing.B) {
 }
 
 func BenchmarkNewChunker(b *testing.B) {
-	p, err := chunker.RandomPolynomial()
+	p, err := RandomPolynomial()
 	require.Nil(b, err)
 
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		chunker.New(bytes.NewBuffer(nil), p, nil)
+		New(bytes.NewBuffer(nil), p, nil)
 	}
 }
