@@ -1,16 +1,15 @@
-package chunker_test
+package chunker
 
 import (
 	"strconv"
 	"testing"
 
-	"github.com/restic/chunker"
 	"github.com/stretchr/testify/require"
 )
 
 var polAddTests = []struct {
-	x, y chunker.Pol
-	sum  chunker.Pol
+	x, y Pol
+	sum  Pol
 }{
 	{23, 16, 23 ^ 16},
 	{0x9a7e30d1e855e0a0, 0x670102a1f4bcd414, 0xfd7f32701ce934b4},
@@ -24,18 +23,18 @@ func TestPolAdd(t *testing.T) {
 	}
 }
 
-func parseBin(s string) chunker.Pol {
+func parseBin(s string) Pol {
 	i, err := strconv.ParseUint(s, 2, 64)
 	if err != nil {
 		panic(err)
 	}
 
-	return chunker.Pol(i)
+	return Pol(i)
 }
 
 var polMulTests = []struct {
-	x, y chunker.Pol
-	res  chunker.Pol
+	x, y Pol
+	res  Pol
 }{
 	{1, 2, 2},
 	{
@@ -102,14 +101,14 @@ func TestPolMulOverflow(t *testing.T) {
 		}
 	}()
 
-	x := chunker.Pol(1 << 63)
+	x := Pol(1 << 63)
 	x.Mul(2)
 	t.Fatal("overflow test did not panic")
 }
 
 var polDivTests = []struct {
-	x, y chunker.Pol
-	res  chunker.Pol
+	x, y Pol
+	res  Pol
 }{
 	{10, 50, 0},
 	{0, 1, 0},
@@ -146,8 +145,8 @@ func TestPolDiv(t *testing.T) {
 }
 
 var polModTests = []struct {
-	x, y chunker.Pol
-	res  chunker.Pol
+	x, y Pol
+	res  Pol
 }{
 	{10, 50, 10},
 	{0, 1, 0},
@@ -181,8 +180,8 @@ func TestPolModt(t *testing.T) {
 }
 
 func BenchmarkPolDivMod(t *testing.B) {
-	f := chunker.Pol(0x2482734cacca49)
-	g := chunker.Pol(0x3af4b284899)
+	f := Pol(0x2482734cacca49)
+	g := Pol(0x3af4b284899)
 
 	for i := 0; i < t.N; i++ {
 		g.DivMod(f)
@@ -190,8 +189,8 @@ func BenchmarkPolDivMod(t *testing.B) {
 }
 
 func BenchmarkPolDiv(t *testing.B) {
-	f := chunker.Pol(0x2482734cacca49)
-	g := chunker.Pol(0x3af4b284899)
+	f := Pol(0x2482734cacca49)
+	g := Pol(0x3af4b284899)
 
 	for i := 0; i < t.N; i++ {
 		g.Div(f)
@@ -199,8 +198,8 @@ func BenchmarkPolDiv(t *testing.B) {
 }
 
 func BenchmarkPolMod(t *testing.B) {
-	f := chunker.Pol(0x2482734cacca49)
-	g := chunker.Pol(0x3af4b284899)
+	f := Pol(0x2482734cacca49)
+	g := Pol(0x3af4b284899)
 
 	for i := 0; i < t.N; i++ {
 		g.Mod(f)
@@ -208,7 +207,7 @@ func BenchmarkPolMod(t *testing.B) {
 }
 
 func BenchmarkPolDeg(t *testing.B) {
-	f := chunker.Pol(0x3af4b284899)
+	f := Pol(0x3af4b284899)
 	d := f.Deg()
 	if d != 41 {
 		t.Fatalf("BenchmalPolDeg: Wrong degree %d returned, expected %d",
@@ -221,25 +220,25 @@ func BenchmarkPolDeg(t *testing.B) {
 }
 
 func TestRandomPolynomial(t *testing.T) {
-	_, err := chunker.RandomPolynomial()
+	_, err := RandomPolynomial()
 	require.Nil(t, err)
 }
 
 func BenchmarkRandomPolynomial(t *testing.B) {
 	for i := 0; i < t.N; i++ {
-		_, err := chunker.RandomPolynomial()
+		_, err := RandomPolynomial()
 		require.Nil(t, err)
 	}
 }
 
 func TestExpandPolynomial(t *testing.T) {
-	pol := chunker.Pol(0x3DA3358B4DC173)
+	pol := Pol(0x3DA3358B4DC173)
 	s := pol.Expand()
 	require.Equal(t, "x^53+x^52+x^51+x^50+x^48+x^47+x^45+x^41+x^40+x^37+x^36+x^34+x^32+x^31+x^27+x^25+x^24+x^22+x^19+x^18+x^16+x^15+x^14+x^8+x^6+x^5+x^4+x+1", s)
 }
 
 var polIrredTests = []struct {
-	f     chunker.Pol
+	f     Pol
 	irred bool
 }{
 	{0x38f1e565e288df, false},
@@ -278,7 +277,7 @@ func TestPolIrreducible(t *testing.T) {
 
 func BenchmarkPolIrreducible(b *testing.B) {
 	// find first irreducible polynomial
-	var pol chunker.Pol
+	var pol Pol
 	for _, test := range polIrredTests {
 		if test.irred {
 			pol = test.f
@@ -293,9 +292,9 @@ func BenchmarkPolIrreducible(b *testing.B) {
 }
 
 var polGCDTests = []struct {
-	f1  chunker.Pol
-	f2  chunker.Pol
-	gcd chunker.Pol
+	f1  Pol
+	f2  Pol
+	gcd Pol
 }{
 	{10, 50, 2},
 	{0, 1, 1},
@@ -356,10 +355,10 @@ func TestPolGCD(t *testing.T) {
 }
 
 var polMulModTests = []struct {
-	f1  chunker.Pol
-	f2  chunker.Pol
-	g   chunker.Pol
-	mod chunker.Pol
+	f1  Pol
+	f2  Pol
+	g   Pol
+	mod Pol
 }{
 	{
 		0x1230,
