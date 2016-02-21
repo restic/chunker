@@ -1,3 +1,4 @@
+[![GoDoc](https://godoc.org/github.com/restic/chunker?status.svg)](http://godoc.org/github.com/restic/chunker)
 [![Build Status](https://travis-ci.org/restic/chunker.svg?branch=master)](https://travis-ci.org/restic/chunker)
 
 The package `chunker` implements content-defined-chunking (CDC) based on a
