@@ -10,3 +10,15 @@ go:
 os:
   - linux
   - osx
+
+install:
+  - go get -t ./...
+  - go get -u github.com/golang/lint/golint
+  - go get -u golang.org/x/tools/cmd/goimports
+
+script:
+  - go vet ./...
+  - diff <(goimports -d .) <(printf "")
+  - diff <(golint ./...) <(printf "")
+  - go test -v -cpu=2 ./...
+  - go test -v -cpu=1,2,4 -short -race ./...
