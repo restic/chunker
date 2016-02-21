@@ -73,7 +73,7 @@ var chunks2 = []chunk{
 	chunk{MinSize, 0, parseDigest("07854d2fef297a06ba81685e660c332de36d5d18d546927d30daad6d7fda1541")},
 }
 
-func testWithData(t *testing.T, chnker *Chunker, testChunks []chunk) []*Chunk {
+func testWithData(t *testing.T, chnker *Chunker, testChunks []chunk, checkDigest bool) []*Chunk {
 	chunks := []*Chunk{}
 
 	pos := uint(0)
@@ -104,7 +104,7 @@ func testWithData(t *testing.T, chnker *Chunker, testChunks []chunk) []*Chunk {
 					i, len(chunks)-1, chunk.CutFP, c.Cut)
 			}
 
-			if c.Digest != nil && !bytes.Equal(c.Digest, chunk.Digest) {
+			if checkDigest && !bytes.Equal(c.Digest, chunk.Digest) {
 				t.Fatalf("Digest fingerprint for chunk %d/%d does not match: expected %02x, got %02x",
 					i, len(chunks)-1, chunk.Digest, c.Digest)
 			}
@@ -146,7 +146,7 @@ func TestChunker(t *testing.T) {
 	// setup data source
 	buf := getRandom(23, 32*1024*1024)
 	ch := New(bytes.NewReader(buf), testPol, sha256.New())
-	chunks := testWithData(t, ch, chunks1)
+	chunks := testWithData(t, ch, chunks1, true)
 
 	// test reader
 	for i, c := range chunks {
@@ -174,16 +174,16 @@ func TestChunker(t *testing.T) {
 	buf = bytes.Repeat([]byte{0}, len(chunks2)*MinSize)
 	ch = New(bytes.NewReader(buf), testPol, sha256.New())
 
-	testWithData(t, ch, chunks2)
+	testWithData(t, ch, chunks2, true)
 }
 
 func TestChunkerReset(t *testing.T) {
 	buf := getRandom(23, 32*1024*1024)
 	ch := New(bytes.NewReader(buf), testPol, sha256.New())
-	testWithData(t, ch, chunks1)
+	testWithData(t, ch, chunks1, true)
 
-	ch.Reset(bytes.NewReader(buf), testPol)
-	testWithData(t, ch, chunks1)
+	ch.Reset(bytes.NewReader(buf), testPol, sha256.New())
+	testWithData(t, ch, chunks1, true)
 }
 
 func TestChunkerWithRandomPolynomial(t *testing.T) {
@@ -218,7 +218,7 @@ func TestChunkerWithoutHash(t *testing.T) {
 	buf := getRandom(23, 32*1024*1024)
 
 	ch := New(bytes.NewReader(buf), testPol, nil)
-	chunks := testWithData(t, ch, chunks1)
+	chunks := testWithData(t, ch, chunks1, false)
 
 	// test reader
 	for i, c := range chunks {
@@ -249,12 +249,17 @@ func TestChunkerWithoutHash(t *testing.T) {
 	buf = bytes.Repeat([]byte{0}, len(chunks2)*MinSize)
 	ch = New(bytes.NewReader(buf), testPol, sha256.New())
 
-	testWithData(t, ch, chunks2)
+	testWithData(t, ch, chunks2, false)
 }
 
-func benchmarkChunker(b *testing.B, hash hash.Hash) {
-	size := 10 * 1024 * 1024
+func benchmarkChunker(b *testing.B, h func() hash.Hash, checkDigest bool) {
+	size := 32 * 1024 * 1024
 	rd := bytes.NewReader(getRandom(23, size))
+	var hash hash.Hash
+	if h != nil {
+		hash = h()
+	}
+	ch := New(rd, testPol, hash)
 
 	b.ResetTimer()
 	b.SetBytes(int64(size))
@@ -264,10 +269,16 @@ func benchmarkChunker(b *testing.B, hash hash.Hash) {
 		chunks = 0
 
 		rd.Seek(0, 0)
-		ch := New(rd, testPol, hash)
+		if h != nil {
+			hash = h()
+		} else {
+			hash = nil
+		}
+		ch.Reset(rd, testPol, hash)
 
+		cur := 0
 		for {
-			_, err := ch.Next()
+			chunk, err := ch.Next()
 
 			if err == io.EOF {
 				break
@@ -277,7 +288,25 @@ func benchmarkChunker(b *testing.B, hash hash.Hash) {
 				b.Fatalf("Unexpected error occurred: %v", err)
 			}
 
+			if chunk.Length != chunks1[cur].Length {
+				b.Errorf("wrong chunk length, want %d, got %d",
+					chunks1[cur].Length, chunk.Length)
+			}
+
+			if chunk.Cut != chunks1[cur].CutFP {
+				b.Errorf("wrong cut fingerprint, want 0x%x, got 0x%x",
+					chunks1[cur].CutFP, chunk.Cut)
+			}
+
+			if checkDigest {
+				if !bytes.Equal(chunk.Digest, chunks1[cur].Digest) {
+					b.Errorf("wrong digest, want %x, got %x",
+					chunks1[cur].Digest, chunk.Digest)
+				}
+			}
+
 			chunks++
+			cur++
 		}
 	}
 
@@ -285,15 +314,15 @@ func benchmarkChunker(b *testing.B, hash hash.Hash) {
 }
 
 func BenchmarkChunkerWithSHA256(b *testing.B) {
-	benchmarkChunker(b, sha256.New())
+	benchmarkChunker(b, sha256.New, true)
 }
 
 func BenchmarkChunkerWithMD5(b *testing.B) {
-	benchmarkChunker(b, md5.New())
+	benchmarkChunker(b, md5.New, false)
 }
 
 func BenchmarkChunker(b *testing.B) {
-	benchmarkChunker(b, nil)
+	benchmarkChunker(b, nil, false)
 }
 
 func BenchmarkNewChunker(b *testing.B) {

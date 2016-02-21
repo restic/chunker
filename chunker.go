@@ -101,9 +101,10 @@ func New(rd io.Reader, pol Pol, h hash.Hash) *Chunker {
 }
 
 // Reset reinitializes the chunker with a new reader and polynomial.
-func (c *Chunker) Reset(rd io.Reader, pol Pol) {
+func (c *Chunker) Reset(rd io.Reader, pol Pol, h hash.Hash) {
 	*c = Chunker{
 		buf: c.buf,
+		h: h,
 		pol: pol,
 		rd: rd,
 	}
