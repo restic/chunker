@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	KiB = 1024
-	MiB = 1024 * KiB
+	kiB = 1024
+	miB = 1024 * kiB
 
 	// WindowSize is the size of the sliding window.
 	windowSize = 64
@@ -18,13 +18,13 @@ const (
 	averageBits = 20
 
 	// MinSize is the minimal size of a chunk.
-	MinSize = 512 * KiB
+	MinSize = 512 * kiB
 	// MaxSize is the maximal size of a chunk.
-	MaxSize = 8 * MiB
+	MaxSize = 8 * miB
 
 	splitmask = (1 << averageBits) - 1
 
-	chunkerBufSize = 512 * KiB
+	chunkerBufSize = 512 * kiB
 )
 
 var bufPool = sync.Pool{
@@ -55,6 +55,7 @@ type Chunk struct {
 	Digest []byte
 }
 
+// Reader returns a reader that yields the data for this chunk.
 func (c Chunk) Reader(r io.ReaderAt) io.Reader {
 	return io.NewSectionReader(r, int64(c.Start), int64(c.Length))
 }

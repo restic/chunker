@@ -94,11 +94,11 @@ func TestPolMulOverflow(t *testing.T) {
 
 		if e, ok := err.(string); ok && e == "multiplication would overflow uint64" {
 			return
-		} else {
-			t.Logf("invalid error raised: %v", err)
-			// re-raise error if not overflow
-			panic(err)
 		}
+
+		t.Logf("invalid error raised: %v", err)
+		// re-raise error if not overflow
+		panic(err)
 	}()
 
 	x := Pol(1 << 63)

@@ -258,7 +258,11 @@ func benchmarkChunker(b *testing.B, h func() hash.Hash, checkDigest bool) {
 	for i := 0; i < b.N; i++ {
 		chunks = 0
 
-		rd.Seek(0, 0)
+		_, err := rd.Seek(0, 0)
+		if err != nil {
+			b.Fatalf("Seek() return error %v",  err)
+		}
+
 		if h != nil {
 			hash = h()
 		} else {
