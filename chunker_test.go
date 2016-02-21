@@ -86,22 +86,22 @@ func testWithData(t *testing.T, chnker *Chunker, testChunks []chunk, checkDigest
 
 		if c.Start != pos {
 			t.Fatalf("Start for chunk %d does not match: expected %d, got %d",
-			i, pos, c.Start)
+				i, pos, c.Start)
 		}
 
 		if c.Length != chunk.Length {
 			t.Fatalf("Length for chunk %d does not match: expected %d, got %d",
-			i, chunk.Length, c.Length)
+				i, chunk.Length, c.Length)
 		}
 
 		if c.Cut != chunk.CutFP {
 			t.Fatalf("Cut fingerprint for chunk %d/%d does not match: expected %016x, got %016x",
-			i, len(chunks)-1, chunk.CutFP, c.Cut)
+				i, len(chunks)-1, chunk.CutFP, c.Cut)
 		}
 
 		if checkDigest && !bytes.Equal(c.Digest, chunk.Digest) {
 			t.Fatalf("Digest fingerprint for chunk %d/%d does not match: expected %02x, got %02x",
-			i, len(chunks)-1, chunk.Digest, c.Digest)
+				i, len(chunks)-1, chunk.Digest, c.Digest)
 		}
 
 		pos += c.Length
@@ -260,7 +260,7 @@ func benchmarkChunker(b *testing.B, h func() hash.Hash, checkDigest bool) {
 
 		_, err := rd.Seek(0, 0)
 		if err != nil {
-			b.Fatalf("Seek() return error %v",  err)
+			b.Fatalf("Seek() return error %v", err)
 		}
 
 		if h != nil {
@@ -295,7 +295,7 @@ func benchmarkChunker(b *testing.B, h func() hash.Hash, checkDigest bool) {
 			if checkDigest {
 				if !bytes.Equal(chunk.Digest, chunks1[cur].Digest) {
 					b.Errorf("wrong digest, want %x, got %x",
-					chunks1[cur].Digest, chunk.Digest)
+						chunks1[cur].Digest, chunk.Digest)
 				}
 			}
 

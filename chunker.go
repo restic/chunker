@@ -105,9 +105,9 @@ func New(rd io.Reader, pol Pol, h hash.Hash) *Chunker {
 func (c *Chunker) Reset(rd io.Reader, pol Pol, h hash.Hash) {
 	*c = Chunker{
 		buf: c.buf,
-		h: h,
+		h:   h,
 		pol: pol,
-		rd: rd,
+		rd:  rd,
 	}
 
 	c.reset()
