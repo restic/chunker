@@ -177,6 +177,15 @@ func TestChunker(t *testing.T) {
 	testWithData(t, ch, chunks2)
 }
 
+func TestChunkerReset(t *testing.T) {
+	buf := getRandom(23, 32*1024*1024)
+	ch := New(bytes.NewReader(buf), testPol, sha256.New())
+	testWithData(t, ch, chunks1)
+
+	ch.Reset(bytes.NewReader(buf), testPol)
+	testWithData(t, ch, chunks1)
+}
+
 func TestChunkerWithRandomPolynomial(t *testing.T) {
 	// setup data source
 	buf := getRandom(23, 32*1024*1024)

@@ -100,6 +100,17 @@ func New(rd io.Reader, pol Pol, h hash.Hash) *Chunker {
 	return c
 }
 
+// Reset reinitializes the chunker with a new reader and polynomial.
+func (c *Chunker) Reset(rd io.Reader, pol Pol) {
+	*c = Chunker{
+		buf: c.buf,
+		pol: pol,
+		rd: rd,
+	}
+
+	c.reset()
+}
+
 func (c *Chunker) reset() {
 	c.polShift = uint(c.pol.Deg() - 8)
 	c.fillTables()
