@@ -193,10 +193,10 @@ func (c *Chunker) fillTables() {
 // Next returns the position and length of the next chunk of data. If an error
 // occurs while reading, the error is returned with a nil chunk. The state of
 // the current chunk is undefined. When the last chunk has been returned, all
-// subsequent calls yield a nil chunk and an io.EOF error.
-func (c *Chunker) Next() (*Chunk, error) {
+// subsequent calls yield an io.EOF error.
+func (c *Chunker) Next() (Chunk, error) {
 	if c.tables == nil {
-		return nil, errors.New("polynomial is not set")
+		return Chunk{}, errors.New("polynomial is not set")
 	}
 
 	for {
@@ -220,7 +220,7 @@ func (c *Chunker) Next() (*Chunk, error) {
 
 				// return current chunk, if any bytes have been processed
 				if c.count > 0 {
-					return &Chunk{
+					return Chunk{
 						Start:  c.start,
 						Length: c.count,
 						Cut:    c.digest,
@@ -230,7 +230,7 @@ func (c *Chunker) Next() (*Chunk, error) {
 			}
 
 			if err != nil {
-				return nil, err
+				return Chunk{}, err
 			}
 
 			c.bpos = 0
@@ -287,7 +287,7 @@ func (c *Chunker) Next() (*Chunk, error) {
 				c.pos += uint(i) + 1
 				c.bpos += uint(i) + 1
 
-				chunk := &Chunk{
+				chunk := Chunk{
 					Start:  c.start,
 					Length: c.count,
 					Cut:    c.digest,

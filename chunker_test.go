@@ -73,8 +73,8 @@ var chunks2 = []chunk{
 	chunk{MinSize, 0, parseDigest("07854d2fef297a06ba81685e660c332de36d5d18d546927d30daad6d7fda1541")},
 }
 
-func testWithData(t *testing.T, chnker *Chunker, testChunks []chunk, checkDigest bool) []*Chunk {
-	chunks := []*Chunk{}
+func testWithData(t *testing.T, chnker *Chunker, testChunks []chunk, checkDigest bool) []Chunk {
+	chunks := []Chunk{}
 
 	pos := uint(0)
 	for i, chunk := range testChunks {
@@ -84,41 +84,31 @@ func testWithData(t *testing.T, chnker *Chunker, testChunks []chunk, checkDigest
 			t.Fatalf("Error returned with chunk %d: %v", i, err)
 		}
 
-		if c == nil {
-			t.Fatalf("Nil chunk returned")
+		if c.Start != pos {
+			t.Fatalf("Start for chunk %d does not match: expected %d, got %d",
+			i, pos, c.Start)
 		}
 
-		if c != nil {
-			if c.Start != pos {
-				t.Fatalf("Start for chunk %d does not match: expected %d, got %d",
-					i, pos, c.Start)
-			}
-
-			if c.Length != chunk.Length {
-				t.Fatalf("Length for chunk %d does not match: expected %d, got %d",
-					i, chunk.Length, c.Length)
-			}
-
-			if c.Cut != chunk.CutFP {
-				t.Fatalf("Cut fingerprint for chunk %d/%d does not match: expected %016x, got %016x",
-					i, len(chunks)-1, chunk.CutFP, c.Cut)
-			}
-
-			if checkDigest && !bytes.Equal(c.Digest, chunk.Digest) {
-				t.Fatalf("Digest fingerprint for chunk %d/%d does not match: expected %02x, got %02x",
-					i, len(chunks)-1, chunk.Digest, c.Digest)
-			}
-
-			pos += c.Length
-			chunks = append(chunks, c)
+		if c.Length != chunk.Length {
+			t.Fatalf("Length for chunk %d does not match: expected %d, got %d",
+			i, chunk.Length, c.Length)
 		}
+
+		if c.Cut != chunk.CutFP {
+			t.Fatalf("Cut fingerprint for chunk %d/%d does not match: expected %016x, got %016x",
+			i, len(chunks)-1, chunk.CutFP, c.Cut)
+		}
+
+		if checkDigest && !bytes.Equal(c.Digest, chunk.Digest) {
+			t.Fatalf("Digest fingerprint for chunk %d/%d does not match: expected %02x, got %02x",
+			i, len(chunks)-1, chunk.Digest, c.Digest)
+		}
+
+		pos += c.Length
+		chunks = append(chunks, c)
 	}
 
-	c, err := chnker.Next()
-
-	if c != nil {
-		t.Fatal("additional non-nil chunk returned")
-	}
+	_, err := chnker.Next()
 
 	if err != io.EOF {
 		t.Fatal("wrong error returned after last chunk")
