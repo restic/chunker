@@ -2,12 +2,9 @@ package chunker
 
 import (
 	"bytes"
-	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
-	"hash"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"testing"
 	"time"
@@ -78,7 +75,7 @@ func testWithData(t *testing.T, chnker *Chunker, testChunks []chunk, checkDigest
 
 	pos := uint(0)
 	for i, chunk := range testChunks {
-		c, err := chnker.Next()
+		c, err := chnker.Next(nil)
 
 		if err != nil {
 			t.Fatalf("Error returned with chunk %d: %v", i, err)
@@ -99,17 +96,19 @@ func testWithData(t *testing.T, chnker *Chunker, testChunks []chunk, checkDigest
 				i, len(chunks)-1, chunk.CutFP, c.Cut)
 		}
 
-		if checkDigest && !bytes.Equal(c.Digest, chunk.Digest) {
-			t.Fatalf("Digest fingerprint for chunk %d/%d does not match: expected %02x, got %02x",
-				i, len(chunks)-1, chunk.Digest, c.Digest)
+		if checkDigest {
+			digest := hashData(c.Data)
+			if !bytes.Equal(chunk.Digest, digest) {
+				t.Fatalf("Digest fingerprint for chunk %d/%d does not match: expected %02x, got %02x",
+					i, len(chunks)-1, chunk.Digest, digest)
+			}
 		}
 
 		pos += c.Length
 		chunks = append(chunks, c)
 	}
 
-	_, err := chnker.Next()
-
+	_, err := chnker.Next(nil)
 	if err != io.EOF {
 		t.Fatal("wrong error returned after last chunk")
 	}
@@ -132,47 +131,31 @@ func getRandom(seed, count int) []byte {
 	return buf
 }
 
+func hashData(d []byte) []byte {
+	h := sha256.New()
+	h.Write(d)
+	return h.Sum(nil)
+}
+
 func TestChunker(t *testing.T) {
 	// setup data source
 	buf := getRandom(23, 32*1024*1024)
-	ch := New(bytes.NewReader(buf), testPol, sha256.New())
-	chunks := testWithData(t, ch, chunks1, true)
-
-	// test reader
-	for i, c := range chunks {
-		rd := c.Reader(bytes.NewReader(buf))
-
-		h := sha256.New()
-		n, err := io.Copy(h, rd)
-		if err != nil {
-			t.Fatalf("io.Copy(): %v", err)
-		}
-
-		if uint(n) != chunks1[i].Length {
-			t.Fatalf("reader returned wrong number of bytes: expected %d, got %d",
-				chunks1[i].Length, n)
-		}
-
-		d := h.Sum(nil)
-		if !bytes.Equal(d, chunks1[i].Digest) {
-			t.Fatalf("wrong hash returned: expected %02x, got %02x",
-				chunks1[i].Digest, d)
-		}
-	}
+	ch := New(bytes.NewReader(buf), testPol)
+	testWithData(t, ch, chunks1, true)
 
 	// setup nullbyte data source
 	buf = bytes.Repeat([]byte{0}, len(chunks2)*MinSize)
-	ch = New(bytes.NewReader(buf), testPol, sha256.New())
+	ch = New(bytes.NewReader(buf), testPol)
 
 	testWithData(t, ch, chunks2, true)
 }
 
 func TestChunkerReset(t *testing.T) {
 	buf := getRandom(23, 32*1024*1024)
-	ch := New(bytes.NewReader(buf), testPol, sha256.New())
+	ch := New(bytes.NewReader(buf), testPol)
 	testWithData(t, ch, chunks1, true)
 
-	ch.Reset(bytes.NewReader(buf), testPol, sha256.New())
+	ch.Reset(bytes.NewReader(buf), testPol)
 	testWithData(t, ch, chunks1, true)
 }
 
@@ -187,11 +170,11 @@ func TestChunkerWithRandomPolynomial(t *testing.T) {
 	t.Logf("generating random polynomial took %v", time.Since(start))
 
 	start = time.Now()
-	ch := New(bytes.NewReader(buf), p, sha256.New())
+	ch := New(bytes.NewReader(buf), p)
 	t.Logf("creating chunker took %v", time.Since(start))
 
 	// make sure that first chunk is different
-	c, err := ch.Next()
+	c, err := ch.Next(nil)
 
 	require.NotEqual(t, c.Cut, chunks1[0].CutFP,
 		"Cut point is the same")
@@ -199,7 +182,7 @@ func TestChunkerWithRandomPolynomial(t *testing.T) {
 	require.NotEqual(t, c.Length, chunks1[0].Length,
 		"Length is the same")
 
-	require.True(t, !bytes.Equal(c.Digest, chunks1[0].Digest),
+	require.True(t, !bytes.Equal(hashData(c.Data), chunks1[0].Digest),
 		"Digest is the same")
 }
 
@@ -207,49 +190,34 @@ func TestChunkerWithoutHash(t *testing.T) {
 	// setup data source
 	buf := getRandom(23, 32*1024*1024)
 
-	ch := New(bytes.NewReader(buf), testPol, nil)
+	ch := New(bytes.NewReader(buf), testPol)
 	chunks := testWithData(t, ch, chunks1, false)
 
 	// test reader
 	for i, c := range chunks {
-		rd := c.Reader(bytes.NewReader(buf))
-
-		buf2, err := ioutil.ReadAll(rd)
-		if err != nil {
-			t.Fatalf("io.Copy(): %v", err)
-		}
-
-		if uint(len(buf2)) != chunks1[i].Length {
+		if uint(len(c.Data)) != chunks1[i].Length {
 			t.Fatalf("reader returned wrong number of bytes: expected %d, got %d",
-				chunks1[i].Length, uint(len(buf2)))
+				chunks1[i].Length, len(c.Data))
 		}
 
-		if uint(len(buf2)) != chunks1[i].Length {
-			t.Fatalf("wrong number of bytes returned: expected %02x, got %02x",
-				chunks[i].Length, len(buf2))
-		}
-
-		if !bytes.Equal(buf[c.Start:c.Start+c.Length], buf2) {
+		if !bytes.Equal(buf[c.Start:c.Start+c.Length], c.Data) {
 			t.Fatalf("invalid data for chunk returned: expected %02x, got %02x",
-				buf[c.Start:c.Start+c.Length], buf2)
+				buf[c.Start:c.Start+c.Length], c.Data)
 		}
 	}
 
 	// setup nullbyte data source
 	buf = bytes.Repeat([]byte{0}, len(chunks2)*MinSize)
-	ch = New(bytes.NewReader(buf), testPol, sha256.New())
+	ch = New(bytes.NewReader(buf), testPol)
 
 	testWithData(t, ch, chunks2, false)
 }
 
-func benchmarkChunker(b *testing.B, h func() hash.Hash, checkDigest bool) {
+func benchmarkChunker(b *testing.B, checkDigest bool) {
 	size := 32 * 1024 * 1024
 	rd := bytes.NewReader(getRandom(23, size))
-	var hash hash.Hash
-	if h != nil {
-		hash = h()
-	}
-	ch := New(rd, testPol, hash)
+	ch := New(rd, testPol)
+	buf := make([]byte, MaxSize)
 
 	b.ResetTimer()
 	b.SetBytes(int64(size))
@@ -263,16 +231,11 @@ func benchmarkChunker(b *testing.B, h func() hash.Hash, checkDigest bool) {
 			b.Fatalf("Seek() return error %v", err)
 		}
 
-		if h != nil {
-			hash = h()
-		} else {
-			hash = nil
-		}
-		ch.Reset(rd, testPol, hash)
+		ch.Reset(rd, testPol)
 
 		cur := 0
 		for {
-			chunk, err := ch.Next()
+			chunk, err := ch.Next(buf)
 
 			if err == io.EOF {
 				break
@@ -293,9 +256,10 @@ func benchmarkChunker(b *testing.B, h func() hash.Hash, checkDigest bool) {
 			}
 
 			if checkDigest {
-				if !bytes.Equal(chunk.Digest, chunks1[cur].Digest) {
+				h := hashData(chunk.Data)
+				if !bytes.Equal(h, chunks1[cur].Digest) {
 					b.Errorf("wrong digest, want %x, got %x",
-						chunks1[cur].Digest, chunk.Digest)
+						chunks1[cur].Digest, h)
 				}
 			}
 
@@ -308,15 +272,11 @@ func benchmarkChunker(b *testing.B, h func() hash.Hash, checkDigest bool) {
 }
 
 func BenchmarkChunkerWithSHA256(b *testing.B) {
-	benchmarkChunker(b, sha256.New, true)
-}
-
-func BenchmarkChunkerWithMD5(b *testing.B) {
-	benchmarkChunker(b, md5.New, false)
+	benchmarkChunker(b, true)
 }
 
 func BenchmarkChunker(b *testing.B) {
-	benchmarkChunker(b, nil, false)
+	benchmarkChunker(b, false)
 }
 
 func BenchmarkNewChunker(b *testing.B) {
@@ -326,6 +286,6 @@ func BenchmarkNewChunker(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		New(bytes.NewBuffer(nil), p, nil)
+		New(bytes.NewBuffer(nil), p)
 	}
 }
