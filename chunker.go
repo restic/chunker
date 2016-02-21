@@ -26,10 +26,6 @@ const (
 	chunkerBufSize = 512 * kiB
 )
 
-var bufPool = sync.Pool{
-	New: func() interface{} { return make([]byte, chunkerBufSize) },
-}
-
 type tables struct {
 	out [256]Pol
 	mod [256]Pol
@@ -83,7 +79,7 @@ type Chunker struct {
 // with bufsize and pass all data to hash along the way.
 func New(rd io.Reader, pol Pol) *Chunker {
 	c := &Chunker{
-		buf: bufPool.Get().([]byte),
+		buf: make([]byte, chunkerBufSize),
 		pol: pol,
 		rd:  rd,
 	}
@@ -203,9 +199,6 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 			// chunk.
 			if err == io.EOF && !c.closed {
 				c.closed = true
-
-				// return the buffer to the pool
-				bufPool.Put(c.buf)
 
 				// return current chunk, if any bytes have been processed
 				if c.count > 0 {
