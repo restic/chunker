@@ -16,9 +16,9 @@ const (
 	// aim to create chunks of 20 bits or about 1MiB on average.
 	averageBits = 20
 
-	// MinSize is the minimal size of a chunk.
+	// MinSize is the default minimal size of a chunk.
 	MinSize = 512 * kiB
-	// MaxSize is the maximal size of a chunk.
+	// MaxSize is the default maximal size of a chunk.
 	MaxSize = 8 * miB
 
 	splitmask = (1 << averageBits) - 1
@@ -52,6 +52,8 @@ type Chunk struct {
 
 // Chunker splits content with Rabin Fingerprints.
 type Chunker struct {
+	MinSize, MaxSize uint
+
 	pol      Pol
 	polShift uint
 	tables   *tables
@@ -79,9 +81,11 @@ type Chunker struct {
 // with bufsize and pass all data to hash along the way.
 func New(rd io.Reader, pol Pol) *Chunker {
 	c := &Chunker{
-		buf: make([]byte, chunkerBufSize),
-		pol: pol,
-		rd:  rd,
+		buf:     make([]byte, chunkerBufSize),
+		pol:     pol,
+		rd:      rd,
+		MinSize: MinSize,
+		MaxSize: MaxSize,
 	}
 
 	c.reset()
@@ -92,9 +96,11 @@ func New(rd io.Reader, pol Pol) *Chunker {
 // Reset reinitializes the chunker with a new reader and polynomial.
 func (c *Chunker) Reset(rd io.Reader, pol Pol) {
 	*c = Chunker{
-		buf: c.buf,
-		pol: pol,
-		rd:  rd,
+		buf:     c.buf,
+		pol:     pol,
+		rd:      rd,
+		MinSize: c.MinSize,
+		MaxSize: c.MaxSize,
 	}
 
 	c.reset()
@@ -116,7 +122,7 @@ func (c *Chunker) reset() {
 	c.start = c.pos
 
 	// do not start a new chunk unless at least MinSize bytes have been read
-	c.pre = MinSize - windowSize
+	c.pre = c.MinSize - windowSize
 }
 
 // Calculate out_table and mod_table for optimization. Must be called only
@@ -258,7 +264,7 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 			// end inline
 
 			add++
-			if add < MinSize {
+			if add < c.MinSize {
 				continue
 			}
 
