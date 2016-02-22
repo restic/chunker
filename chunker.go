@@ -175,8 +175,8 @@ func (c *Chunker) fillTables() {
 }
 
 // Next returns the position and length of the next chunk of data. If an error
-// occurs while reading, the error is returned with a nil chunk. The state of
-// the current chunk is undefined. When the last chunk has been returned, all
+// occurs while reading, the error is returned. Afterwards, the state of the
+// current chunk is undefined. When the last chunk has been returned, all
 // subsequent calls yield an io.EOF error.
 func (c *Chunker) Next(data []byte) (Chunk, error) {
 	data = data[:0]
