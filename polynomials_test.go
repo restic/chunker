@@ -3,8 +3,6 @@ package chunker
 import (
 	"strconv"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 )
 
 var polAddTests = []struct {
@@ -17,9 +15,14 @@ var polAddTests = []struct {
 }
 
 func TestPolAdd(t *testing.T) {
-	for _, test := range polAddTests {
-		require.Equal(t, test.sum, test.x.Add(test.y))
-		require.Equal(t, test.sum, test.y.Add(test.x))
+	for i, test := range polAddTests {
+		if test.sum != test.x.Add(test.y) {
+			t.Errorf("test %d failed: sum != x+y", i)
+		}
+
+		if test.sum != test.y.Add(test.x) {
+			t.Errorf("test %d failed: sum != y+x", i)
+		}
 	}
 }
 
@@ -77,13 +80,15 @@ var polMulTests = []struct {
 func TestPolMul(t *testing.T) {
 	for i, test := range polMulTests {
 		m := test.x.Mul(test.y)
-		require.Equal(t, test.res, m,
-			"TestPolMul failed for test %d: %v * %v: want %v, got %v",
-			i, test.x, test.y, test.res, m)
+		if test.res != m {
+			t.Errorf("TestPolMul failed for test %d: %v * %v: want %v, got %v",
+				i, test.x, test.y, test.res, m)
+		}
 		m = test.y.Mul(test.x)
-		require.Equal(t, test.res, test.y.Mul(test.x),
-			"TestPolMul failed for %d: %v * %v: want %v, got %v",
-			i, test.x, test.y, test.res, m)
+		if test.res != test.y.Mul(test.x) {
+			t.Errorf("TestPolMul failed for %d: %v * %v: want %v, got %v",
+				i, test.x, test.y, test.res, m)
+		}
 	}
 }
 
@@ -138,9 +143,10 @@ var polDivTests = []struct {
 func TestPolDiv(t *testing.T) {
 	for i, test := range polDivTests {
 		m := test.x.Div(test.y)
-		require.Equal(t, test.res, m,
-			"TestPolDiv failed for test %d: %v * %v: want %v, got %v",
-			i, test.x, test.y, test.res, m)
+		if test.res != m {
+			t.Errorf("TestPolDiv failed for test %d: %v * %v: want %v, got %v",
+				i, test.x, test.y, test.res, m)
+		}
 	}
 }
 
@@ -175,7 +181,10 @@ var polModTests = []struct {
 
 func TestPolModt(t *testing.T) {
 	for _, test := range polModTests {
-		require.Equal(t, test.res, test.x.Mod(test.y))
+		res := test.x.Mod(test.y)
+		if test.res != res {
+			t.Errorf("test %d failed: want %v, got %v", test.res, res)
+		}
 	}
 }
 
@@ -221,20 +230,26 @@ func BenchmarkPolDeg(t *testing.B) {
 
 func TestRandomPolynomial(t *testing.T) {
 	_, err := RandomPolynomial()
-	require.Nil(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func BenchmarkRandomPolynomial(t *testing.B) {
 	for i := 0; i < t.N; i++ {
 		_, err := RandomPolynomial()
-		require.Nil(t, err)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
 func TestExpandPolynomial(t *testing.T) {
 	pol := Pol(0x3DA3358B4DC173)
 	s := pol.Expand()
-	require.Equal(t, "x^53+x^52+x^51+x^50+x^48+x^47+x^45+x^41+x^40+x^37+x^36+x^34+x^32+x^31+x^27+x^25+x^24+x^22+x^19+x^18+x^16+x^15+x^14+x^8+x^6+x^5+x^4+x+1", s)
+	if s != "x^53+x^52+x^51+x^50+x^48+x^47+x^45+x^41+x^40+x^37+x^36+x^34+x^32+x^31+x^27+x^25+x^24+x^22+x^19+x^18+x^16+x^15+x^14+x^8+x^6+x^5+x^4+x+1" {
+		t.Fatal("wrong result")
+	}
 }
 
 var polIrredTests = []struct {
@@ -269,9 +284,10 @@ var polIrredTests = []struct {
 
 func TestPolIrreducible(t *testing.T) {
 	for _, test := range polIrredTests {
-		require.Equal(t, test.f.Irreducible(), test.irred,
-			"Irreducibility test for Polynomial %v failed: got %v, wanted %v",
-			test.f, test.f.Irreducible(), test.irred)
+		if test.f.Irreducible() != test.irred {
+			t.Errorf("Irreducibility test for Polynomial %v failed: got %v, wanted %v",
+				test.f, test.f.Irreducible(), test.irred)
+		}
 	}
 }
 
@@ -286,8 +302,9 @@ func BenchmarkPolIrreducible(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		require.True(b, pol.Irreducible(),
-			"Irreducibility test for Polynomial %v failed", pol)
+		if !pol.Irreducible() {
+			b.Errorf("Irreducibility test for Polynomial %v failed", pol)
+		}
 	}
 }
 
@@ -344,13 +361,16 @@ var polGCDTests = []struct {
 func TestPolGCD(t *testing.T) {
 	for i, test := range polGCDTests {
 		gcd := test.f1.GCD(test.f2)
-		require.Equal(t, test.gcd, gcd,
-			"GCD test %d (%+v) failed: got %v, wanted %v",
-			i, test, gcd, test.gcd)
+		if test.gcd != gcd {
+			t.Errorf("GCD test %d (%+v) failed: got %v, wanted %v",
+				i, test, gcd, test.gcd)
+		}
+
 		gcd = test.f2.GCD(test.f1)
-		require.Equal(t, test.gcd, gcd,
-			"GCD test %d (%+v) failed: got %v, wanted %v",
-			i, test, gcd, test.gcd)
+		if test.gcd != gcd {
+			t.Errorf("GCD test %d (%+v) failed: got %v, wanted %v",
+				i, test, gcd, test.gcd)
+		}
 	}
 }
 
@@ -377,8 +397,9 @@ var polMulModTests = []struct {
 func TestPolMulMod(t *testing.T) {
 	for i, test := range polMulModTests {
 		mod := test.f1.MulMod(test.f2, test.g)
-		require.Equal(t, mod, test.mod,
-			"MulMod test %d (%+v) failed: got %v, wanted %v",
-			i, test, mod, test.mod)
+		if mod != test.mod {
+			t.Errorf("MulMod test %d (%+v) failed: got %v, wanted %v",
+				i, test, mod, test.mod)
+		}
 	}
 }

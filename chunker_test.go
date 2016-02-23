@@ -8,8 +8,6 @@ import (
 	"math/rand"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/require"
 )
 
 func parseDigest(s string) []byte {
@@ -166,7 +164,9 @@ func TestChunkerWithRandomPolynomial(t *testing.T) {
 	// generate a new random polynomial
 	start := time.Now()
 	p, err := RandomPolynomial()
-	require.Nil(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("generating random polynomial took %v", time.Since(start))
 
 	start = time.Now()
@@ -176,14 +176,17 @@ func TestChunkerWithRandomPolynomial(t *testing.T) {
 	// make sure that first chunk is different
 	c, err := ch.Next(nil)
 
-	require.NotEqual(t, c.Cut, chunks1[0].CutFP,
-		"Cut point is the same")
+	if c.Cut == chunks1[0].CutFP {
+		t.Fatal("Cut point is the same")
+	}
 
-	require.NotEqual(t, c.Length, chunks1[0].Length,
-		"Length is the same")
+	if c.Length == chunks1[0].Length {
+		t.Fatal("Length is the same")
+	}
 
-	require.True(t, !bytes.Equal(hashData(c.Data), chunks1[0].Digest),
-		"Digest is the same")
+	if bytes.Equal(hashData(c.Data), chunks1[0].Digest) {
+		t.Fatal("Digest is the same")
+	}
 }
 
 func TestChunkerWithoutHash(t *testing.T) {
@@ -281,7 +284,9 @@ func BenchmarkChunker(b *testing.B) {
 
 func BenchmarkNewChunker(b *testing.B) {
 	p, err := RandomPolynomial()
-	require.Nil(b, err)
+	if err != nil {
+		b.Fatal(err)
+	}
 
 	b.ResetTimer()
 
