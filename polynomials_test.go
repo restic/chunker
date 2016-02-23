@@ -180,10 +180,10 @@ var polModTests = []struct {
 }
 
 func TestPolModt(t *testing.T) {
-	for _, test := range polModTests {
+	for i, test := range polModTests {
 		res := test.x.Mod(test.y)
 		if test.res != res {
-			t.Errorf("test %d failed: want %v, got %v", test.res, res)
+			t.Errorf("test %d failed: want %v, got %v", i, test.res, res)
 		}
 	}
 }
