@@ -270,8 +270,24 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 		minSize := c.MinSize
 		maxSize := c.MaxSize
 		digest := c.digest
+		tab := c.tables
+		polShift := c.polShift
+		win := c.window
+		wpos := c.wpos
 		for _, b := range c.buf[c.bpos:c.bmax] {
-			digest = c.slide(digest, b)
+			// slide(b)
+			out := win[wpos]
+			win[wpos] = b
+			digest ^= uint64(c.tables.out[out])
+			wpos = (wpos + 1) % windowSize
+
+			// updateDigest
+			index := digest >> polShift
+			digest <<= 8
+			digest |= uint64(b)
+
+			digest ^= uint64(tab.mod[index])
+			// end manual inline
 
 			add++
 			if add < minSize {
@@ -298,6 +314,8 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 			}
 		}
 		c.digest = digest
+		c.window = win
+		c.wpos = wpos
 
 		steps := c.bmax - c.bpos
 		if steps > 0 {
