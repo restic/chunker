@@ -50,17 +50,7 @@ type Chunk struct {
 	Data   []byte
 }
 
-// Chunker splits content with Rabin Fingerprints.
-type Chunker struct {
-	MinSize, MaxSize uint
-
-	pol      Pol
-	polShift uint
-	tables   *tables
-
-	rd     io.Reader
-	closed bool
-
+type chunkerState struct {
 	window [windowSize]byte
 	wpos   int
 
@@ -77,15 +67,37 @@ type Chunker struct {
 	digest uint64
 }
 
+type chunkerConfig struct {
+	MinSize, MaxSize uint
+
+	pol      Pol
+	polShift uint
+	tables   *tables
+
+	rd     io.Reader
+	closed bool
+
+}
+
+// Chunker splits content with Rabin Fingerprints.
+type Chunker struct {
+	chunkerConfig
+	chunkerState
+}
+
 // New returns a new Chunker based on polynomial p that reads from rd
 // with bufsize and pass all data to hash along the way.
 func New(rd io.Reader, pol Pol) *Chunker {
 	c := &Chunker{
-		buf:     make([]byte, chunkerBufSize),
-		pol:     pol,
-		rd:      rd,
-		MinSize: MinSize,
-		MaxSize: MaxSize,
+		chunkerState: chunkerState{
+			buf:     make([]byte, chunkerBufSize),
+		},
+		chunkerConfig: chunkerConfig{
+			pol:     pol,
+			rd:      rd,
+			MinSize: MinSize,
+			MaxSize: MaxSize,
+		},
 	}
 
 	c.reset()
@@ -96,11 +108,15 @@ func New(rd io.Reader, pol Pol) *Chunker {
 // Reset reinitializes the chunker with a new reader and polynomial.
 func (c *Chunker) Reset(rd io.Reader, pol Pol) {
 	*c = Chunker{
-		buf:     c.buf,
-		pol:     pol,
-		rd:      rd,
-		MinSize: c.MinSize,
-		MaxSize: c.MaxSize,
+		chunkerState: chunkerState{
+			buf:     c.buf,
+		},
+		chunkerConfig: chunkerConfig{
+			pol:     pol,
+			rd:      rd,
+			MinSize: MinSize,
+			MaxSize: MaxSize,
+		},
 	}
 
 	c.reset()
