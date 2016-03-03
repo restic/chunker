@@ -33,12 +33,12 @@ type tables struct {
 
 // cache precomputed tables, these are read-only anyway
 var cache struct {
-	entries map[Pol]*tables
+	entries map[Pol]tables
 	sync.Mutex
 }
 
 func init() {
-	cache.entries = make(map[Pol]*tables)
+	cache.entries = make(map[Pol]tables)
 }
 
 // Chunk is one content-dependent chunk of bytes whose end was cut when the
@@ -70,13 +70,13 @@ type chunkerState struct {
 type chunkerConfig struct {
 	MinSize, MaxSize uint
 
-	pol      Pol
-	polShift uint
-	tables   *tables
+	pol               Pol
+	polShift          uint
+	tables            tables
+	tablesInitialized bool
 
 	rd     io.Reader
 	closed bool
-
 }
 
 // Chunker splits content with Rabin Fingerprints.
@@ -90,7 +90,7 @@ type Chunker struct {
 func New(rd io.Reader, pol Pol) *Chunker {
 	c := &Chunker{
 		chunkerState: chunkerState{
-			buf:     make([]byte, chunkerBufSize),
+			buf: make([]byte, chunkerBufSize),
 		},
 		chunkerConfig: chunkerConfig{
 			pol:     pol,
@@ -109,7 +109,7 @@ func New(rd io.Reader, pol Pol) *Chunker {
 func (c *Chunker) Reset(rd io.Reader, pol Pol) {
 	*c = Chunker{
 		chunkerState: chunkerState{
-			buf:     c.buf,
+			buf: c.buf,
 		},
 		chunkerConfig: chunkerConfig{
 			pol:     pol,
@@ -149,6 +149,8 @@ func (c *Chunker) fillTables() {
 		return
 	}
 
+	c.tablesInitialized = true
+
 	// test if the tables are cached for this polynomial
 	cache.Lock()
 	defer cache.Unlock()
@@ -156,10 +158,6 @@ func (c *Chunker) fillTables() {
 		c.tables = t
 		return
 	}
-
-	// else create a new entry
-	c.tables = &tables{}
-	cache.entries[c.pol] = c.tables
 
 	// calculate table for sliding out bytes. The byte to slide out is used as
 	// the index for the table, the value contains the following:
@@ -194,6 +192,8 @@ func (c *Chunker) fillTables() {
 		// enough to reduce modulo Polynomial
 		c.tables.mod[b] = Pol(uint64(b)<<uint(k)).Mod(c.pol) | (Pol(b) << uint(k))
 	}
+
+	cache.entries[c.pol] = c.tables
 }
 
 // Next returns the position and length of the next chunk of data. If an error
@@ -202,8 +202,8 @@ func (c *Chunker) fillTables() {
 // subsequent calls yield an io.EOF error.
 func (c *Chunker) Next(data []byte) (Chunk, error) {
 	data = data[:0]
-	if c.tables == nil {
-		return Chunk{}, errors.New("polynomial is not set")
+	if !c.tablesInitialized {
+		return Chunk{}, errors.New("tables for polynomial computation not initialized")
 	}
 
 	for {
