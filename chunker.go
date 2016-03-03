@@ -267,15 +267,17 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 		}
 
 		add := c.count
+		minSize := c.MinSize
+		maxSize := c.MaxSize
 		for _, b := range c.buf[c.bpos:c.bmax] {
 			c.slide(b)
 
 			add++
-			if add < c.MinSize {
+			if add < minSize {
 				continue
 			}
 
-			if (c.digest&splitmask) == 0 || add >= c.MaxSize {
+			if (c.digest&splitmask) == 0 || add >= maxSize {
 				i := add - c.count - 1
 				data = append(data, c.buf[c.bpos:c.bpos+uint(i)+1]...)
 				c.count = add
