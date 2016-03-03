@@ -268,7 +268,7 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 				continue
 			}
 
-			if (c.digest&splitmask) == 0 || add >= MaxSize {
+			if (c.digest&splitmask) == 0 || add >= c.MaxSize {
 				i := add - c.count - 1
 				data = append(data, c.buf[c.bpos:c.bpos+uint(i)+1]...)
 				c.count = add
