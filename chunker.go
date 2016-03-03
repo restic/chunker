@@ -275,7 +275,7 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 			// slide(b)
 			out := win[wpos]
 			win[wpos] = b
-			digest ^= uint64(c.tables.out[out])
+			digest ^= uint64(tab.out[out])
 			wpos = (wpos + 1) % windowSize
 
 			// updateDigest
