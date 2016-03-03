@@ -265,19 +265,7 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 
 		add := c.count
 		for _, b := range c.buf[c.bpos:c.bmax] {
-			// inline c.slide(b) and append(b) to increase performance
-			out := c.window[c.wpos]
-			c.window[c.wpos] = b
-			c.digest ^= uint64(c.tables.out[out])
-			c.wpos = (c.wpos + 1) % windowSize
-
-			// c.append(b)
-			index := c.digest >> c.polShift
-			c.digest <<= 8
-			c.digest |= uint64(b)
-
-			c.digest ^= uint64(c.tables.mod[index])
-			// end inline
+			c.slide(b)
 
 			add++
 			if add < c.MinSize {
