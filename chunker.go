@@ -206,9 +206,10 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 		return Chunk{}, errors.New("tables for polynomial computation not initialized")
 	}
 
+	buf := c.buf
 	for {
 		if c.bpos >= c.bmax {
-			n, err := io.ReadFull(c.rd, c.buf[:])
+			n, err := io.ReadFull(c.rd, buf[:])
 
 			if err == io.ErrUnexpectedEOF {
 				err = nil
@@ -246,7 +247,7 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 			n := c.bmax - c.bpos
 			if c.pre > uint(n) {
 				c.pre -= uint(n)
-				data = append(data, c.buf[c.bpos:c.bmax]...)
+				data = append(data, buf[c.bpos:c.bmax]...)
 
 				c.count += uint(n)
 				c.pos += uint(n)
@@ -255,7 +256,7 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 				continue
 			}
 
-			data = append(data, c.buf[c.bpos:c.bpos+c.pre]...)
+			data = append(data, buf[c.bpos:c.bpos+c.pre]...)
 
 			c.bpos += c.pre
 			c.count += c.pre
@@ -271,7 +272,7 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 		polShift := c.polShift
 		win := c.window
 		wpos := c.wpos
-		for _, b := range c.buf[c.bpos:c.bmax] {
+		for _, b := range buf[c.bpos:c.bmax] {
 			// slide(b)
 			out := win[wpos]
 			win[wpos] = b
@@ -297,6 +298,7 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 				c.count = add
 				c.pos += uint(i) + 1
 				c.bpos += uint(i) + 1
+				c.buf = buf
 
 				chunk := Chunk{
 					Start:  c.start,
