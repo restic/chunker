@@ -134,7 +134,7 @@ func (c *Chunker) reset() {
 	c.digest = 0
 	c.wpos = 0
 	c.count = 0
-	c.slide(1)
+	c.digest = c.slide(c.digest, 1)
 	c.start = c.pos
 
 	// do not start a new chunk unless at least MinSize bytes have been read
@@ -269,15 +269,16 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 		add := c.count
 		minSize := c.MinSize
 		maxSize := c.MaxSize
+		digest := c.digest
 		for _, b := range c.buf[c.bpos:c.bmax] {
-			c.slide(b)
+			digest = c.slide(digest, b)
 
 			add++
 			if add < minSize {
 				continue
 			}
 
-			if (c.digest&splitmask) == 0 || add >= maxSize {
+			if (digest&splitmask) == 0 || add >= maxSize {
 				i := add - c.count - 1
 				data = append(data, c.buf[c.bpos:c.bpos+uint(i)+1]...)
 				c.count = add
@@ -287,7 +288,7 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 				chunk := Chunk{
 					Start:  c.start,
 					Length: c.count,
-					Cut:    c.digest,
+					Cut:    digest,
 					Data:   data,
 				}
 
@@ -296,6 +297,7 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 				return chunk, nil
 			}
 		}
+		c.digest = digest
 
 		steps := c.bmax - c.bpos
 		if steps > 0 {
@@ -316,13 +318,14 @@ func updateDigest(digest uint64, polShift uint, tab *tables, b byte) (newDigest 
 	return digest
 }
 
-func (c *Chunker) slide(b byte) {
+func (c *Chunker) slide(digest uint64, b byte) (newDigest uint64) {
 	out := c.window[c.wpos]
 	c.window[c.wpos] = b
-	c.digest ^= uint64(c.tables.out[out])
+	digest ^= uint64(c.tables.out[out])
 	c.wpos = (c.wpos + 1) % windowSize
 
-	c.digest = updateDigest(c.digest, c.polShift, c.tables, b)
+	digest = updateDigest(digest, c.polShift, c.tables, b)
+	return digest
 }
 
 func appendByte(hash Pol, b byte, pol Pol) Pol {
