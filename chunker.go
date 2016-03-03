@@ -302,8 +302,8 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 	}
 }
 
-func (c *Chunker) updateDigest(digest uint64, b byte) (newDigest uint64) {
-	index := digest >> c.polShift
+func (c *Chunker) updateDigest(digest uint64, polShift uint, b byte) (newDigest uint64) {
+	index := digest >> polShift
 	digest <<= 8
 	digest |= uint64(b)
 
@@ -317,7 +317,7 @@ func (c *Chunker) slide(b byte) {
 	c.digest ^= uint64(c.tables.out[out])
 	c.wpos = (c.wpos + 1) % windowSize
 
-	c.digest = c.updateDigest(c.digest, b)
+	c.digest = c.updateDigest(c.digest, c.polShift, b)
 }
 
 func appendByte(hash Pol, b byte, pol Pol) Pol {
