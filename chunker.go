@@ -33,12 +33,12 @@ type tables struct {
 
 // cache precomputed tables, these are read-only anyway
 var cache struct {
-	entries map[Pol]tables
+	entries map[Pol]*tables
 	sync.Mutex
 }
 
 func init() {
-	cache.entries = make(map[Pol]tables)
+	cache.entries = make(map[Pol]*tables)
 }
 
 // Chunk is one content-dependent chunk of bytes whose end was cut when the
@@ -72,7 +72,7 @@ type chunkerConfig struct {
 
 	pol               Pol
 	polShift          uint
-	tables            tables
+	tables            *tables
 	tablesInitialized bool
 
 	rd     io.Reader
@@ -158,6 +158,9 @@ func (c *Chunker) fillTables() {
 		c.tables = t
 		return
 	}
+
+	c.tables = &tables{}
+	cache.entries[c.pol] = c.tables
 
 	// calculate table for sliding out bytes. The byte to slide out is used as
 	// the index for the table, the value contains the following:
@@ -302,12 +305,12 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 	}
 }
 
-func (c *Chunker) updateDigest(digest uint64, polShift uint, b byte) (newDigest uint64) {
+func updateDigest(digest uint64, polShift uint, tab *tables, b byte) (newDigest uint64) {
 	index := digest >> polShift
 	digest <<= 8
 	digest |= uint64(b)
 
-	digest ^= uint64(c.tables.mod[index])
+	digest ^= uint64(tab.mod[index])
 	return digest
 }
 
@@ -317,7 +320,7 @@ func (c *Chunker) slide(b byte) {
 	c.digest ^= uint64(c.tables.out[out])
 	c.wpos = (c.wpos + 1) % windowSize
 
-	c.digest = c.updateDigest(c.digest, c.polShift, b)
+	c.digest = updateDigest(c.digest, c.polShift, c.tables, b)
 }
 
 func appendByte(hash Pol, b byte, pol Pol) Pol {
