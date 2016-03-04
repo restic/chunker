@@ -206,6 +206,11 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 		return Chunk{}, errors.New("tables for polynomial computation not initialized")
 	}
 
+	tabout := c.tables.out
+	tabmod := c.tables.mod
+	polShift := c.polShift
+	minSize := c.MinSize
+	maxSize := c.MaxSize
 	buf := c.buf
 	for {
 		if c.bpos >= c.bmax {
@@ -265,18 +270,14 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 		}
 
 		add := c.count
-		minSize := c.MinSize
-		maxSize := c.MaxSize
 		digest := c.digest
-		tab := c.tables
-		polShift := c.polShift
 		win := c.window
 		wpos := c.wpos
 		for _, b := range buf[c.bpos:c.bmax] {
 			// slide(b)
 			out := win[wpos]
 			win[wpos] = b
-			digest ^= uint64(tab.out[out])
+			digest ^= uint64(tabout[out])
 			wpos = (wpos + 1) % windowSize
 
 			// updateDigest
@@ -284,7 +285,7 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 			digest <<= 8
 			digest |= uint64(b)
 
-			digest ^= uint64(tab.mod[index])
+			digest ^= uint64(tabmod[index])
 			// end manual inline
 
 			add++
