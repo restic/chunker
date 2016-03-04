@@ -280,7 +280,7 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 			wpos = (wpos + 1) % windowSize
 
 			// updateDigest
-			index := digest >> polShift
+			index := byte(digest >> polShift)
 			digest <<= 8
 			digest |= uint64(b)
 
