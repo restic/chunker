@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 )
 
@@ -154,17 +155,25 @@ func (x Pol) Mod(d Pol) Pol {
 // randPolMaxTries.
 const randPolMaxTries = 1e6
 
-// RandomPolynomial returns a new random irreducible polynomial of degree 53
-// (largest prime number below 64-8). There are (2^53-2/53) irreducible
-// polynomials of degree 53 in F_2[X], c.f. Michael O. Rabin (1981):
-// "Fingerprinting by Random Polynomials", page 4. If no polynomial could be
-// found in one million tries, an error is returned.
+// RandomPolynomial returns a new random irreducible polynomial
+// of degree 53 using the default System CSPRNG as source.
+// It is equivalent to calling DerivePolynomial(rand.Reader).
 func RandomPolynomial() (Pol, error) {
+	return DerivePolynomial(rand.Reader)
+}
+
+// DerivePolynomial returns an irreducible polynomial of degree 53
+// (largest prime number below 64-8) by reading bytes from source.
+// There are (2^53-2/53) irreducible polynomials of degree 53 in
+// F_2[X], c.f. Michael O. Rabin (1981): "Fingerprinting by Random
+// Polynomials", page 4. If no polynomial could be found in one
+// million tries, an error is returned.
+func DerivePolynomial(source io.Reader) (Pol, error) {
 	for i := 0; i < randPolMaxTries; i++ {
 		var f Pol
 
-		// choose polynomial at random
-		err := binary.Read(rand.Reader, binary.LittleEndian, &f)
+		// choose polynomial at (pseudo)random
+		err := binary.Read(source, binary.LittleEndian, &f)
 		if err != nil {
 			return 0, err
 		}
