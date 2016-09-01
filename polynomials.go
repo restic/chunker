@@ -65,18 +65,19 @@ func (x Pol) Deg() int {
 		return -1
 	}
 
-	var mask Pol = (1 << 63)
-	for i := 63; i >= 0; i-- {
-		// test if bit i is set
-		if x&mask > 0 {
-			// this is the degree of x
-			return i
+	// see https://graphics.stanford.edu/~seander/bithacks.html#IntegerLog
+	var b = [...]uint64{0x2, 0xc, 0xf0, 0xff00, 0xffff0000, 0xffffffff00000000}
+	var S = [...]int{1, 2, 4, 8, 16, 32}
+
+	r := 0
+	for i := 5; i >= 0; i-- {
+		if uint64(x)&b[i] > 0 {
+			x >>= uint(S[i])
+			r |= S[i]
 		}
-		mask >>= 1
 	}
 
-	// fall-through, return -1
-	return -1
+	return r
 }
 
 // String returns the coefficients in hex.
