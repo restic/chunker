@@ -66,15 +66,36 @@ func (x Pol) Deg() int {
 	}
 
 	// see https://graphics.stanford.edu/~seander/bithacks.html#IntegerLog
-	var b = [...]uint64{0x2, 0xc, 0xf0, 0xff00, 0xffff0000, 0xffffffff00000000}
-	var S = [...]int{1, 2, 4, 8, 16, 32}
 
 	r := 0
-	for i := 5; i >= 0; i-- {
-		if uint64(x)&b[i] > 0 {
-			x >>= uint(S[i])
-			r |= S[i]
-		}
+	if uint64(x)&0xffffffff00000000 > 0 {
+		x >>= 32
+		r |= 32
+	}
+
+	if uint64(x)&0xffff0000 > 0 {
+		x >>= 16
+		r |= 16
+	}
+
+	if uint64(x)&0xff00 > 0 {
+		x >>= 8
+		r |= 8
+	}
+
+	if uint64(x)&0xf0 > 0 {
+		x >>= 4
+		r |= 4
+	}
+
+	if uint64(x)&0xc > 0 {
+		x >>= 2
+		r |= 2
+	}
+
+	if uint64(x)&0x2 > 0 {
+		x >>= 1
+		r |= 1
 	}
 
 	return r
