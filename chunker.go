@@ -3,6 +3,7 @@ package chunker
 import (
 	"errors"
 	"io"
+	"math"
 	"sync"
 )
 
@@ -209,7 +210,7 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 	tabmod := c.tables.mod
 	polShift := c.polShift
 	minSize := c.MinSize
-	maxSize := c.MaxSize
+	maxSize := uint(math.Min(float64(c.MaxSize), float64(cap(data))))
 	buf := c.buf
 	for {
 		if c.bpos >= c.bmax {
