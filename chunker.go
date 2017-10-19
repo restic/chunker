@@ -94,7 +94,7 @@ func New(rd io.Reader, pol Pol) *Chunker {
 }
 
 // NewWithBoundaries returns a new Chunker based on polynomial p that reads from
-// rd and custom min and max size boundaries
+// rd and custom min and max size boundaries.
 func NewWithBoundaries(rd io.Reader, pol Pol, min, max uint) *Chunker {
 	c := &Chunker{
 		chunkerState: chunkerState{
@@ -116,6 +116,12 @@ func NewWithBoundaries(rd io.Reader, pol Pol, min, max uint) *Chunker {
 
 // Reset reinitializes the chunker with a new reader and polynomial.
 func (c *Chunker) Reset(rd io.Reader, pol Pol) {
+	c.ResetWithBoundaries(rd, pol, MinSize, MaxSize)
+}
+
+// ResetWithBoundaries reinitializes the chunker with a new reader, polynomial
+// and custom min and max size boundaries.
+func (c *Chunker) ResetWithBoundaries(rd io.Reader, pol Pol, min, max uint) {
 	*c = Chunker{
 		chunkerState: chunkerState{
 			buf: c.buf,
@@ -123,8 +129,8 @@ func (c *Chunker) Reset(rd io.Reader, pol Pol) {
 		chunkerConfig: chunkerConfig{
 			pol:       pol,
 			rd:        rd,
-			MinSize:   MinSize,
-			MaxSize:   MaxSize,
+			MinSize:   min,
+			MaxSize:   max,
 			splitmask: (1 << 20) - 1,
 		},
 	}
