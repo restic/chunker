@@ -294,7 +294,10 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 			out := win[wpos]
 			win[wpos] = b
 			digest ^= uint64(tabout[out])
-			wpos = (wpos + 1) % windowSize
+			wpos++
+			if wpos >= windowSize {
+				wpos = 0
+			}
 
 			// updateDigest
 			index := byte(digest >> polShift)
