@@ -2,8 +2,9 @@ language: go
 sudo: false
 
 go:
-  - 1.6.4
-  - 1.7.4
+  - "1.8.X"
+  - "1.9.X"
+  - "1.10.X"
   - tip
 
 os:
