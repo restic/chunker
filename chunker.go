@@ -225,6 +225,12 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 	tabout := c.tables.out
 	tabmod := c.tables.mod
 	polShift := c.polShift
+	// go guarantees the expected behavior for bit shifts even for shift counts
+	// larger than the value width. Bounding the value of polShift allows the compiler
+	// to optimize the code for 'digest >> polShift'
+	if polShift > 53-8 {
+		return Chunk{}, errors.New("the polynomial must have a degree less than or equal 53")
+	}
 	minSize := c.MinSize
 	maxSize := c.MaxSize
 	buf := c.buf
