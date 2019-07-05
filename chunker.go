@@ -291,11 +291,12 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 		wpos := c.wpos
 		for _, b := range buf[c.bpos:c.bmax] {
 			// slide(b)
+			// limit wpos before to elide array bound checks
+			wpos = wpos % windowSize
 			out := win[wpos]
 			win[wpos] = b
 			digest ^= uint64(tabout[out])
 			wpos++
-			wpos = wpos % windowSize
 
 			// updateDigest
 			index := byte(digest >> polShift)
@@ -332,7 +333,7 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 		}
 		c.digest = digest
 		c.window = win
-		c.wpos = wpos
+		c.wpos = wpos % windowSize
 
 		steps := c.bmax - c.bpos
 		if steps > 0 {
