@@ -47,7 +47,7 @@ type Chunk struct {
 
 type chunkerState struct {
 	window [windowSize]byte
-	wpos   int
+	wpos   uint
 
 	buf  []byte
 	bpos uint
@@ -295,9 +295,7 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 			win[wpos] = b
 			digest ^= uint64(tabout[out])
 			wpos++
-			if wpos >= windowSize {
-				wpos = 0
-			}
+			wpos = wpos % windowSize
 
 			// updateDigest
 			index := byte(digest >> polShift)
