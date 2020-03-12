@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/bits"
 	"strconv"
 )
 
@@ -60,44 +61,7 @@ func (x Pol) Mul(y Pol) Pol {
 
 // Deg returns the degree of the polynomial x. If x is zero, -1 is returned.
 func (x Pol) Deg() int {
-	// the degree of 0 is -1
-	if x == 0 {
-		return -1
-	}
-
-	// see https://graphics.stanford.edu/~seander/bithacks.html#IntegerLog
-
-	r := 0
-	if uint64(x)&0xffffffff00000000 > 0 {
-		x >>= 32
-		r |= 32
-	}
-
-	if uint64(x)&0xffff0000 > 0 {
-		x >>= 16
-		r |= 16
-	}
-
-	if uint64(x)&0xff00 > 0 {
-		x >>= 8
-		r |= 8
-	}
-
-	if uint64(x)&0xf0 > 0 {
-		x >>= 4
-		r |= 4
-	}
-
-	if uint64(x)&0xc > 0 {
-		x >>= 2
-		r |= 2
-	}
-
-	if uint64(x)&0x2 > 0 {
-		r |= 1
-	}
-
-	return r
+	return bits.Len64(uint64(x)) - 1
 }
 
 // String returns the coefficients in hex.

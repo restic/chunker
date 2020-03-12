@@ -242,9 +242,12 @@ func BenchmarkPolDeg(t *testing.B) {
 			d, 41)
 	}
 
+	var sum int
 	for i := 0; i < t.N; i++ {
-		f.Deg()
+		sum += f.Deg()
 	}
+	// Make sure Deg call isn't optimized away.
+	t.Log("sum of Deg:", sum)
 }
 
 func TestRandomPolynomial(t *testing.T) {
