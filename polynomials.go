@@ -18,25 +18,15 @@ func (x Pol) Add(y Pol) Pol {
 	return r
 }
 
-// mulOverflows returns true if the multiplication would overflow uint64.
-// Code by Rob Pike, see
-// https://groups.google.com/d/msg/golang-nuts/h5oSN5t3Au4/KaNQREhZh0QJ
-func mulOverflows(a, b Pol) bool {
-	if a <= 1 || b <= 1 {
-		return false
-	}
-	c := a.mul(b)
-	d := c.Div(b)
-	if d != a {
-		return true
-	}
-
-	return false
-}
-
-func (x Pol) mul(y Pol) Pol {
-	if x == 0 || y == 0 {
+// Mul returns x*y. When an overflow occurs, Mul panics.
+func (x Pol) Mul(y Pol) Pol {
+	switch {
+	case x == 0 || y == 0:
 		return 0
+	case x == 1:
+		return y
+	case y == 1:
+		return x
 	}
 
 	var res Pol
@@ -46,16 +36,11 @@ func (x Pol) mul(y Pol) Pol {
 		}
 	}
 
-	return res
-}
-
-// Mul returns x*y. When an overflow occurs, Mul panics.
-func (x Pol) Mul(y Pol) Pol {
-	if mulOverflows(x, y) {
+	if res.Div(y) != x {
 		panic("multiplication would overflow uint64")
 	}
 
-	return x.mul(y)
+	return res
 }
 
 // Deg returns the degree of the polynomial x. If x is zero, -1 is returned.
