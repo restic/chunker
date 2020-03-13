@@ -27,6 +27,8 @@ func (x Pol) Mul(y Pol) Pol {
 		return y
 	case y == 1:
 		return x
+	case y == 2:
+		return x.mul2()
 	}
 
 	var res Pol
@@ -41,6 +43,14 @@ func (x Pol) Mul(y Pol) Pol {
 	}
 
 	return res
+}
+
+// 2*x.
+func (x Pol) mul2() Pol {
+	if x&(1<<63) != 0 {
+		panic("multiplication would overflow uint64")
+	}
+	return x << 1
 }
 
 // Deg returns the degree of the polynomial x. If x is zero, -1 is returned.
