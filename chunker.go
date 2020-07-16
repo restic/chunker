@@ -222,8 +222,7 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 		return Chunk{}, errors.New("tables for polynomial computation not initialized")
 	}
 
-	tabout := c.tables.out
-	tabmod := c.tables.mod
+	tab := &c.tables
 	polShift := c.polShift
 	// go guarantees the expected behavior for bit shifts even for shift counts
 	// larger than the value width. Bounding the value of polShift allows the compiler
@@ -301,15 +300,10 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 			wpos = wpos % windowSize
 			out := win[wpos]
 			win[wpos] = b
-			digest ^= uint64(tabout[out])
+			digest ^= uint64(tab.out[out])
 			wpos++
 
-			// updateDigest
-			index := byte(digest >> polShift)
-			digest <<= 8
-			digest |= uint64(b)
-
-			digest ^= uint64(tabmod[index])
+			digest = updateDigest(digest, polShift, tab, b)
 			// end manual inline
 
 			add++
