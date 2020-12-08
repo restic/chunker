@@ -7,14 +7,8 @@ matrix:
       go: "1.9.x"
       arch: amd64
     - os: linux
-      go: "1.9.x"
-      arch: ppc64le
-    - os: linux
       go: "1.10.x"
       arch: amd64
-    - os: linux
-      go: "1.10.x"
-      arch: ppc64le
     - os: linux
       go: "tip"
       arch: amd64
@@ -24,9 +18,7 @@ matrix:
     - os: osx
       go: "1.10.x"
       arch: amd64
-    - os: osx
-      go: "1.10.x"
-      arch: ppc64le
+    
 
 install:
   - go get -t ./...
