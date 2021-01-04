@@ -1,0 +1,54 @@
+name: test
+on:
+  # run tests on push to master, but not when other branches are pushed to
+  push:
+    branches:
+      - master
+
+  # run tests for all pull requests
+  pull_request:
+
+jobs:
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.15
+
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Run tests
+        run: |
+          go test ./...
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v2
+        with:
+          # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
+          version: v1.34
+          # Optional: show only new issues if it's a pull request. The default value is `false`.
+          only-new-issues: true
+          args: --verbose --timeout 5m
+
+        # only run golangci-lint for pull requests, otherwise ALL hints get
+        # reported. We need to slowly address all issues until we can enable
+        # linting the master branch :)
+        if: github.event_name == 'pull_request'
+
+      - name: Check go.mod
+        run: |
+          echo "check if go.mod is up to date"
+          go mod tidy
+          git diff --exit-code go.mod

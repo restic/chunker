@@ -1,5 +1,5 @@
 [![GoDoc](https://godoc.org/github.com/restic/chunker?status.svg)](http://godoc.org/github.com/restic/chunker)
-[![Build Status](https://travis-ci.com/restic/chunker.svg?branch=master)](https://travis-ci.com/restic/chunker)
+[![Build Status](https://github.com/restic/chunker/workflows/test/badge.svg)](https://github.com/restic/chunker/actions?query=workflow%3Atest)
 
 The package `chunker` implements content-defined-chunking (CDC) based on a
 rolling Rabin Hash. The library is part of the [restic backup
