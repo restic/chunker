@@ -194,10 +194,10 @@ func TestChunker(t *testing.T) {
 
 func TestChunkerWithCustomAverageBits(t *testing.T) {
 	buf := getRandom(23, 32*1024*1024)
-	ch := New(bytes.NewReader(buf), testPol)
 
 	// sligthly decrease averageBits to get more chunks
-	ch.SetAverageBits(19)
+	ch := New(bytes.NewReader(buf), testPol, WithAverageBits(19))
+
 	testWithData(t, ch, chunks3, true)
 }
 
