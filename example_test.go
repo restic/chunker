@@ -1,24 +1,33 @@
-package chunker
+package chunker_test
 
 import (
 	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"math/rand"
+
+	"github.com/restic/chunker"
 )
 
 func ExampleChunker() {
 	// generate 32MiB of deterministic pseudo-random data
-	data := getRandom(23, 32*1024*1024)
+	rng := rand.New(rand.NewSource(23))
+	data := make([]byte, 32*1024*1024)
+
+	_, err := rng.Read(data)
+	if err != nil {
+		panic(err)
+	}
 
 	// create a chunker
-	chunker := New(bytes.NewReader(data), Pol(0x3DA3358B4DC173))
+	chnkr := chunker.New(bytes.NewReader(data), chunker.Pol(0x3DA3358B4DC173))
 
 	// reuse this buffer
 	buf := make([]byte, 8*1024*1024)
 
 	for i := 0; i < 5; i++ {
-		chunk, err := chunker.Next(buf)
+		chunk, err := chnkr.Next(buf)
 		if err == io.EOF {
 			break
 		}
@@ -31,9 +40,9 @@ func ExampleChunker() {
 	}
 
 	// Output:
-	// 2163460 4b94cb2cf293855ea43bf766731c74969b91aa6bf3c078719aabdd19860d590d
-	// 643703 5727a63c0964f365ab8ed2ccf604912f2ea7be29759a2b53ede4d6841e397407
-	// 1528956 a73759636a1e7a2758767791c69e81b69fb49236c6929e5d1b654e06e37674ba
-	// 1955808 c955fb059409b25f07e5ae09defbbc2aadf117c97a3724e06ad4abd2787e6824
-	// 2222372 6ba5e9f7e1b310722be3627716cf469be941f7f3e39a4c3bcefea492ec31ee56
+	// 1015370 615e8851030f318751f3c8baf8fbfa9958e2dd7f25dc1a87dcf6d6f79d1f1a9f
+	// 1276199 f1cb038c558d3a2093049815cc45f80cd367712634a28f6dd36642f905d35c37
+	// 1124437 a8e19dcd4224b58eb2b480ae42bb1a4a3b0c91c074f4745dbe3f8e4ec1a926e7
+	// 3580969 2b3a3fe65ce9d689599c3b26375c40c22955bf92b170b24258e54dee91e3c2af
+	// 3709129 47672502d75db244cb3dc3098eed87ffd537c9f0d66fb82a0198b6f6994409f2
 }
