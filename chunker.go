@@ -69,7 +69,7 @@ func (c *BaseChunker) SetAverageBits(averageBits int) {
 	c.splitmask = (1 << uint64(averageBits)) - 1
 }
 
-func NewBase(pol Pol, opts ...BaseOption) *BaseChunker {
+func NewBase(pol Pol, opts ...baseOption) *BaseChunker {
 	c := &BaseChunker{
 		chunkerState: chunkerState{},
 		chunkerConfig: chunkerConfig{
@@ -89,7 +89,7 @@ func NewBase(pol Pol, opts ...BaseOption) *BaseChunker {
 }
 
 // Reset reinitializes the chunker with a new reader and polynomial.
-func (c *BaseChunker) Reset(pol Pol, opts ...BaseOption) {
+func (c *BaseChunker) Reset(pol Pol, opts ...baseOption) {
 	*c = *NewBase(pol, opts...)
 }
 
@@ -284,7 +284,7 @@ type Chunker struct {
 
 // New returns a new Chunker based on polynomial p that reads from rd.
 // Chunker behavior can be customized by passing options, see With* functions.
-func New(rd io.Reader, pol Pol, opts ...Option) *Chunker {
+func New(rd io.Reader, pol Pol, opts ...option) *Chunker {
 	c := &Chunker{
 		BaseChunker: *NewBase(pol),
 		chunkerBuffer: chunkerBuffer{
@@ -313,8 +313,8 @@ func NewWithBoundaries(rd io.Reader, pol Pol, min, max uint) *Chunker {
 	return New(rd, pol, WithBoundaries(min, max))
 }
 
-func (c *Chunker) Reset(rd io.Reader, pol Pol, opts ...Option) {
-	opts = append([]Option{WithBuffer(c.buf)}, opts...)
+func (c *Chunker) Reset(rd io.Reader, pol Pol, opts ...option) {
+	opts = append([]option{WithBuffer(c.buf)}, opts...)
 	*c = *New(rd, pol, opts...)
 }
 
