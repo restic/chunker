@@ -88,7 +88,7 @@ func NewBase(pol Pol, opts ...baseOption) *BaseChunker {
 	return c
 }
 
-// Reset reinitializes the chunker with a new reader and polynomial.
+// Reset reinitializes the chunker with a new reader, polynomial, and options.
 func (c *BaseChunker) Reset(pol Pol, opts ...baseOption) {
 	*c = *NewBase(pol, opts...)
 }
@@ -313,6 +313,7 @@ func NewWithBoundaries(rd io.Reader, pol Pol, min, max uint) *Chunker {
 	return New(rd, pol, WithBoundaries(min, max))
 }
 
+// Reset reinitializes the chunker with a new reader, polynomial, and options.
 func (c *Chunker) Reset(rd io.Reader, pol Pol, opts ...option) {
 	opts = append([]option{WithBuffer(c.buf)}, opts...)
 	*c = *New(rd, pol, opts...)
