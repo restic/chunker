@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"io"
 	"math/rand"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -208,6 +209,14 @@ func TestChunkerReset(t *testing.T) {
 
 	ch.Reset(bytes.NewReader(buf), testPol)
 	testWithData(t, ch, chunks1, true)
+
+	// test Reset with Options
+	tmpBuf := make([]byte, 1024*1024)
+	ch.Reset(bytes.NewReader(buf), testPol, WithAverageBits(19), WithBuffer(tmpBuf))
+	testWithData(t, ch, chunks3, true)
+	if reflect.DeepEqual(tmpBuf, make([]byte, 1024*1024)) {
+		t.Fatalf("Buffer was not used")
+	}
 }
 
 func TestChunkerWithRandomPolynomial(t *testing.T) {
