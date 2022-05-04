@@ -308,11 +308,11 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 
 			add++
 
-			if (digest&c.splitmask) == 0 || add >= maxSize {
-				if add < minSize {
-					continue
-				}
+			if add < minSize {
+				continue
+			}
 
+			if (digest&c.splitmask) == 0 || add >= maxSize {
 				i := add - c.count - 1
 				data = append(data, c.buf[c.bpos:c.bpos+uint(i)+1]...)
 				c.count = add
