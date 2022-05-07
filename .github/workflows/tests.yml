@@ -8,28 +8,74 @@ on:
   # run tests for all pull requests
   pull_request:
 
+env:
+  latest_go: "1.18.x"
+  GO111MODULE: on
+
 jobs:
   test:
-    name: Run tests
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # list of jobs to run:
+        include:
+          - job_name: Windows
+            go: 1.18.x
+            os: windows-latest
+            install_verb: install
+
+          - job_name: macOS
+            go: 1.18.x
+            os: macOS-latest
+            install_verb: install
+
+          - job_name: Linux
+            go: 1.18.x
+            os: ubuntu-latest
+            install_verb: install
+
+          - job_name: Linux
+            go: 1.17.x
+            os: ubuntu-latest
+            install_verb: install
+
+          - job_name: Linux
+            go: 1.16.x
+            os: ubuntu-latest
+            install_verb: get
+
+          - job_name: Linux
+            go: 1.15.x
+            os: ubuntu-latest
+            install_verb: get
+
+    name: ${{ matrix.job_name }} Go ${{ matrix.go }}
+    runs-on: ${{ matrix.os }}
+
+    env:
+      GOPROXY: https://proxy.golang.org
 
     steps:
-      - name: Set up Go
+      - name: Set up Go ${{ matrix.go }}
         uses: actions/setup-go@v2
         with:
-          go-version: 1.15
+          go-version: ${{ matrix.go }}
 
       - name: Check out code
         uses: actions/checkout@v2
 
       - name: Run tests
         run: |
-          go test ./...
+          go test -cover ./...
 
   lint:
     name: lint
     runs-on: ubuntu-latest
     steps:
+      - name: Set up Go ${{ env.latest_go }}
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ env.latest_go }}
+
       - name: Check out code
         uses: actions/checkout@v2
 
@@ -37,10 +83,11 @@ jobs:
         uses: golangci/golangci-lint-action@v2
         with:
           # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
-          version: v1.34
+          version: v1.45
           # Optional: show only new issues if it's a pull request. The default value is `false`.
           only-new-issues: true
           args: --verbose --timeout 5m
+          skip-go-installation: true
 
         # only run golangci-lint for pull requests, otherwise ALL hints get
         # reported. We need to slowly address all issues until we can enable
