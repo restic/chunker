@@ -39,7 +39,6 @@ func init() {
 // Chunk is one content-dependent chunk of bytes whose end was cut when the
 // Rabin Fingerprint had the value stored in Cut.
 type Chunk struct {
-	Start  uint
 	Length uint
 	Cut    uint64
 	Data   []byte
@@ -53,12 +52,8 @@ type chunkerState struct {
 	bpos uint
 	bmax uint
 
-	start uint
-	count uint
-	pos   uint
-
-	pre uint // wait for this many bytes before start calculating an new chunk
-
+	count  uint
+	pre    uint // wait for this many bytes before start calculating an new chunk
 	digest uint64
 }
 
@@ -151,7 +146,6 @@ func (c *Chunker) reset() {
 	c.wpos = 0
 	c.count = 0
 	c.digest = c.slide(c.digest, 1)
-	c.start = c.pos
 
 	// do not start a new chunk unless at least MinSize bytes have been read
 	c.pre = c.MinSize - windowSize
@@ -250,12 +244,12 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 				c.closed = true
 
 				// return current chunk, if any bytes have been processed
-				if c.count > 0 {
+				if len(data) > 0 {
 					return Chunk{
-						Start:  c.start,
-						Length: c.count,
-						Cut:    c.digest,
-						Data:   data,
+						Length: uint(len(data)),
+						// somewhat meaningless as this is not a split point
+						Cut:  c.digest,
+						Data: data,
 					}, nil
 				}
 			}
@@ -276,7 +270,6 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 				data = append(data, buf[c.bpos:c.bmax]...)
 
 				c.count += uint(n)
-				c.pos += uint(n)
 				c.bpos = c.bmax
 
 				continue
@@ -286,7 +279,6 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 
 			c.bpos += c.pre
 			c.count += c.pre
-			c.pos += c.pre
 			c.pre = 0
 		}
 
@@ -316,13 +308,11 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 				i := add - c.count - 1
 				data = append(data, c.buf[c.bpos:c.bpos+uint(i)+1]...)
 				c.count = add
-				c.pos += uint(i) + 1
 				c.bpos += uint(i) + 1
 				c.buf = buf
 
 				chunk := Chunk{
-					Start:  c.start,
-					Length: c.count,
+					Length: uint(len(data)),
 					Cut:    digest,
 					Data:   data,
 				}
@@ -341,7 +331,6 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 			data = append(data, c.buf[c.bpos:c.bpos+steps]...)
 		}
 		c.count += steps
-		c.pos += steps
 		c.bpos = c.bmax
 	}
 }
