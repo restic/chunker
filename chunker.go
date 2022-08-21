@@ -1,7 +1,6 @@
 package chunker
 
 import (
-	"errors"
 	"io"
 	"sync"
 )
@@ -47,14 +46,14 @@ type Chunk struct {
 type chunkerState struct {
 	window [windowSize]byte
 	wpos   uint
+	digest uint64
+
+	pre   uint // wait for this many bytes before start calculating an new chunk
+	count uint // used for max chunk size tracking
 
 	buf  []byte
 	bpos uint
 	bmax uint
-
-	count  uint
-	pre    uint // wait for this many bytes before start calculating an new chunk
-	digest uint64
 }
 
 type chunkerConfig struct {
@@ -212,24 +211,9 @@ func (c *Chunker) fillTables() {
 // subsequent calls yield an io.EOF error.
 func (c *Chunker) Next(data []byte) (Chunk, error) {
 	data = data[:0]
-	if !c.tablesInitialized {
-		return Chunk{}, errors.New("tables for polynomial computation not initialized")
-	}
-
-	tab := &c.tables
-	polShift := c.polShift
-	// go guarantees the expected behavior for bit shifts even for shift counts
-	// larger than the value width. Bounding the value of polShift allows the compiler
-	// to optimize the code for 'digest >> polShift'
-	if polShift > 53-8 {
-		return Chunk{}, errors.New("the polynomial must have a degree less than or equal 53")
-	}
-	minSize := c.MinSize
-	maxSize := c.MaxSize
-	buf := c.buf
 	for {
 		if c.bpos >= c.bmax {
-			n, err := io.ReadFull(c.rd, buf[:])
+			n, err := io.ReadFull(c.rd, c.buf)
 
 			if err == io.ErrUnexpectedEOF {
 				err = nil
@@ -262,77 +246,87 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 			c.bmax = uint(n)
 		}
 
-		// check if bytes have to be dismissed before starting a new chunk
-		if c.pre > 0 {
-			n := c.bmax - c.bpos
-			if c.pre > uint(n) {
-				c.pre -= uint(n)
-				data = append(data, buf[c.bpos:c.bmax]...)
+		split, cut := c.NextSplitPoint(c.buf[c.bpos:c.bmax])
+		if split == -1 {
+			data = append(data, c.buf[c.bpos:c.bmax]...)
+			c.bpos = c.bmax
+		} else {
+			data = append(data, c.buf[c.bpos:c.bpos+uint(split)]...)
+			c.bpos += uint(split)
 
-				c.count += uint(n)
-				c.bpos = c.bmax
+			return Chunk{
+				Length: uint(len(data)),
+				Cut:    cut,
+				Data:   data,
+			}, nil
+		}
+	}
+}
 
+// NextSplitPoint returns the index before which the buf should be split
+// Returns -1 if no split point was found yet.
+func (c *Chunker) NextSplitPoint(buf []byte) (int, uint64) {
+	if !c.tablesInitialized {
+		panic("tables for polynomial computation not initialized")
+	}
+
+	tab := &c.tables
+	polShift := c.polShift
+	// go guarantees the expected behavior for bit shifts even for shift counts
+	// larger than the value width. Bounding the value of polShift allows the compiler
+	// to optimize the code for 'digest >> polShift'
+	if polShift > 53-8 {
+		panic("the polynomial must have a degree less than or equal 53")
+	}
+	minSize := c.MinSize
+	maxSize := c.MaxSize
+
+	idx := 0
+	// check if bytes have to be dismissed before starting a new chunk
+	if c.pre > 0 {
+		if c.pre >= uint(len(buf)) {
+			c.pre -= uint(len(buf))
+			c.count += uint(len(buf))
+			return -1, 0
+		}
+
+		buf = buf[c.pre:]
+		idx = int(c.pre)
+		c.count += c.pre
+		c.pre = 0
+	}
+
+	add := c.count
+	digest := c.digest
+	win := c.window
+	wpos := c.wpos
+	for i, b := range buf {
+		// slide(b)
+		// limit wpos before to elide array bound checks
+		wpos = wpos % windowSize
+		out := win[wpos]
+		win[wpos] = b
+		digest ^= uint64(tab.out[out])
+		wpos++
+
+		digest = updateDigest(digest, polShift, tab, b)
+		// end manual inline
+
+		add++
+
+		if (digest&c.splitmask) == 0 || add >= maxSize {
+			if add < minSize {
 				continue
 			}
-
-			data = append(data, buf[c.bpos:c.bpos+c.pre]...)
-
-			c.bpos += c.pre
-			c.count += c.pre
-			c.pre = 0
+			c.reset()
+			return idx + i + 1, digest
 		}
-
-		add := c.count
-		digest := c.digest
-		win := c.window
-		wpos := c.wpos
-		for _, b := range buf[c.bpos:c.bmax] {
-			// slide(b)
-			// limit wpos before to elide array bound checks
-			wpos = wpos % windowSize
-			out := win[wpos]
-			win[wpos] = b
-			digest ^= uint64(tab.out[out])
-			wpos++
-
-			digest = updateDigest(digest, polShift, tab, b)
-			// end manual inline
-
-			add++
-
-			if (digest&c.splitmask) == 0 || add >= maxSize {
-				if add < minSize {
-					continue
-				}
-
-				i := add - c.count - 1
-				data = append(data, c.buf[c.bpos:c.bpos+uint(i)+1]...)
-				c.count = add
-				c.bpos += uint(i) + 1
-				c.buf = buf
-
-				chunk := Chunk{
-					Length: uint(len(data)),
-					Cut:    digest,
-					Data:   data,
-				}
-
-				c.reset()
-
-				return chunk, nil
-			}
-		}
-		c.digest = digest
-		c.window = win
-		c.wpos = wpos % windowSize
-
-		steps := c.bmax - c.bpos
-		if steps > 0 {
-			data = append(data, c.buf[c.bpos:c.bpos+steps]...)
-		}
-		c.count += steps
-		c.bpos = c.bmax
 	}
+	c.digest = digest
+	c.window = win
+	c.wpos = wpos % windowSize
+	c.count += uint(len(buf))
+	return -1, 0
 }
 
 func updateDigest(digest uint64, polShift uint, tab *tables, b byte) (newDigest uint64) {
