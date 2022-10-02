@@ -274,6 +274,7 @@ func appendByte(hash Pol, b byte, pol Pol) Pol {
 // Chunk is one content-dependent chunk of bytes whose end was cut when the
 // Rabin Fingerprint had the value stored in Cut.
 type Chunk struct {
+	Start  uint
 	Length uint
 	Cut    uint64
 	Data   []byte
@@ -283,6 +284,7 @@ type chunkerBuffer struct {
 	buf  []byte
 	bpos uint
 	bmax uint
+	pos  uint
 
 	rd     io.Reader
 	closed bool
@@ -341,6 +343,7 @@ func (c *Chunker) ResetWithBoundaries(rd io.Reader, pol Pol, min, max uint) {
 // subsequent calls yield an io.EOF error.
 func (c *Chunker) Next(data []byte) (Chunk, error) {
 	data = data[:0]
+	start := c.pos
 	for {
 		if c.bpos >= c.bmax {
 			n, err := io.ReadFull(c.rd, c.buf)
@@ -360,6 +363,7 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 				// return current chunk, if any bytes have been processed
 				if len(data) > 0 {
 					return Chunk{
+						Start:  start,
 						Length: uint(len(data)),
 						// somewhat meaningless as this is not a split point
 						Cut:  c.digest,
@@ -379,12 +383,15 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 		split, cut := c.NextSplitPoint(c.buf[c.bpos:c.bmax])
 		if split == -1 {
 			data = append(data, c.buf[c.bpos:c.bmax]...)
+			c.pos += c.bmax - c.bpos
 			c.bpos = c.bmax
 		} else {
 			data = append(data, c.buf[c.bpos:c.bpos+uint(split)]...)
 			c.bpos += uint(split)
+			c.pos += uint(split)
 
 			return Chunk{
+				Start:  start,
 				Length: uint(len(data)),
 				Cut:    cut,
 				Data:   data,

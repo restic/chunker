@@ -114,6 +114,11 @@ func testWithData(t *testing.T, chnker *Chunker, testChunks []chunk, checkDigest
 			t.Fatalf("Error returned with chunk %d: %v", i, err)
 		}
 
+		if c.Start != pos {
+			t.Fatalf("Start for chunk %d does not match: expected %d, got %d",
+				i, pos, c.Start)
+		}
+
 		if c.Length != chunk.Length {
 			t.Fatalf("Length for chunk %d does not match: expected %d, got %d",
 				i, chunk.Length, c.Length)
@@ -247,7 +252,6 @@ func TestChunkerWithoutHash(t *testing.T) {
 	ch := New(bytes.NewReader(buf), testPol)
 	chunks := testWithData(t, ch, chunks1, false)
 
-	start := uint(0)
 	// test reader
 	for i, c := range chunks {
 		if uint(len(c.Data)) != chunks1[i].Length {
@@ -255,11 +259,10 @@ func TestChunkerWithoutHash(t *testing.T) {
 				chunks1[i].Length, len(c.Data))
 		}
 
-		if !bytes.Equal(buf[start:start+c.Length], c.Data) {
+		if !bytes.Equal(buf[c.Start:c.Start+c.Length], c.Data) {
 			t.Fatalf("invalid data for chunk returned: expected %02x, got %02x",
-				buf[start:start+c.Length], c.Data)
+				buf[c.Start:c.Start+c.Length], c.Data)
 		}
-		start += c.Length
 	}
 
 	// setup nullbyte data source
