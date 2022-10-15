@@ -60,15 +60,6 @@ type BaseChunker struct {
 	chunkerState
 }
 
-// SetAverageBits allows to control the frequency of chunk discovery:
-// the lower averageBits, the higher amount of chunks will be identified.
-// The default value is 20 bits, so chunks will be of 1MiB size on average.
-//
-// Deprecated: SetAverageBits uses should be replaced by NewBase(rd, pol, WithAverageBits(averageBits)).
-func (c *BaseChunker) SetAverageBits(averageBits int) {
-	c.splitmask = (1 << uint64(averageBits)) - 1
-}
-
 func NewBase(pol Pol, opts ...baseOption) *BaseChunker {
 	c := &BaseChunker{
 		chunkerState: chunkerState{},
@@ -311,6 +302,15 @@ func New(rd io.Reader, pol Pol, opts ...option) *Chunker {
 // Deprecated: NewWithBoundaries uses should be replaced by New(rd, pol, WithBoundaries(min, max)).
 func NewWithBoundaries(rd io.Reader, pol Pol, min, max uint) *Chunker {
 	return New(rd, pol, WithBoundaries(min, max))
+}
+
+// SetAverageBits allows to control the frequency of chunk discovery:
+// the lower averageBits, the higher amount of chunks will be identified.
+// The default value is 20 bits, so chunks will be of 1MiB size on average.
+//
+// Deprecated: SetAverageBits uses should be replaced by NewBase(rd, pol, WithAverageBits(averageBits)).
+func (c *Chunker) SetAverageBits(averageBits int) {
+	c.splitmask = (1 << uint64(averageBits)) - 1
 }
 
 // Reset reinitializes the chunker with a new reader, polynomial, and options.
