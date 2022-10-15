@@ -1,7 +1,6 @@
 package chunker
 
 import (
-	"errors"
 	"io"
 	"sync"
 )
@@ -36,30 +35,13 @@ func init() {
 	cache.entries = make(map[Pol]tables)
 }
 
-// Chunk is one content-dependent chunk of bytes whose end was cut when the
-// Rabin Fingerprint had the value stored in Cut.
-type Chunk struct {
-	Start  uint
-	Length uint
-	Cut    uint64
-	Data   []byte
-}
-
 type chunkerState struct {
 	window [windowSize]byte
 	wpos   uint
-
-	buf  []byte
-	bpos uint
-	bmax uint
-
-	start uint
-	count uint
-	pos   uint
-
-	pre uint // wait for this many bytes before start calculating an new chunk
-
 	digest uint64
+
+	pre   uint // wait for this many bytes before start calculating an new chunk
+	count uint // used for max chunk size tracking
 }
 
 type chunkerConfig struct {
@@ -70,13 +52,10 @@ type chunkerConfig struct {
 	tables            tables
 	tablesInitialized bool
 	splitmask         uint64
-
-	rd     io.Reader
-	closed bool
 }
 
 // Chunker splits content with Rabin Fingerprints.
-type Chunker struct {
+type BaseChunker struct {
 	chunkerConfig
 	chunkerState
 }
@@ -84,25 +63,19 @@ type Chunker struct {
 // SetAverageBits allows to control the frequency of chunk discovery:
 // the lower averageBits, the higher amount of chunks will be identified.
 // The default value is 20 bits, so chunks will be of 1MiB size on average.
-func (c *Chunker) SetAverageBits(averageBits int) {
+func (c *BaseChunker) SetAverageBits(averageBits int) {
 	c.splitmask = (1 << uint64(averageBits)) - 1
 }
 
-// New returns a new Chunker based on polynomial p that reads from rd.
-func New(rd io.Reader, pol Pol) *Chunker {
-	return NewWithBoundaries(rd, pol, MinSize, MaxSize)
+func NewBase(pol Pol) *BaseChunker {
+	return NewBaseWithBoundaries(pol, MinSize, MaxSize)
 }
 
-// NewWithBoundaries returns a new Chunker based on polynomial p that reads from
-// rd and custom min and max size boundaries.
-func NewWithBoundaries(rd io.Reader, pol Pol, min, max uint) *Chunker {
-	c := &Chunker{
-		chunkerState: chunkerState{
-			buf: make([]byte, chunkerBufSize),
-		},
+func NewBaseWithBoundaries(pol Pol, min, max uint) *BaseChunker {
+	c := &BaseChunker{
+		chunkerState: chunkerState{},
 		chunkerConfig: chunkerConfig{
 			pol:       pol,
-			rd:        rd,
 			MinSize:   min,
 			MaxSize:   max,
 			splitmask: (1 << 20) - 1, // aim to create chunks of 20 bits or about 1MiB on average.
@@ -110,25 +83,21 @@ func NewWithBoundaries(rd io.Reader, pol Pol, min, max uint) *Chunker {
 	}
 
 	c.reset()
-
 	return c
 }
 
 // Reset reinitializes the chunker with a new reader and polynomial.
-func (c *Chunker) Reset(rd io.Reader, pol Pol) {
-	c.ResetWithBoundaries(rd, pol, MinSize, MaxSize)
+func (c *BaseChunker) Reset(pol Pol) {
+	c.ResetWithBoundaries(pol, MinSize, MaxSize)
 }
 
 // ResetWithBoundaries reinitializes the chunker with a new reader, polynomial
 // and custom min and max size boundaries.
-func (c *Chunker) ResetWithBoundaries(rd io.Reader, pol Pol, min, max uint) {
-	*c = Chunker{
-		chunkerState: chunkerState{
-			buf: c.buf,
-		},
+func (c *BaseChunker) ResetWithBoundaries(pol Pol, min, max uint) {
+	*c = BaseChunker{
+		chunkerState: chunkerState{},
 		chunkerConfig: chunkerConfig{
 			pol:       pol,
-			rd:        rd,
 			MinSize:   min,
 			MaxSize:   max,
 			splitmask: (1 << 20) - 1,
@@ -138,7 +107,7 @@ func (c *Chunker) ResetWithBoundaries(rd io.Reader, pol Pol, min, max uint) {
 	c.reset()
 }
 
-func (c *Chunker) reset() {
+func (c *BaseChunker) reset() {
 	c.polShift = uint(c.pol.Deg() - 8)
 	c.fillTables()
 
@@ -146,12 +115,10 @@ func (c *Chunker) reset() {
 		c.window[i] = 0
 	}
 
-	c.closed = false
 	c.digest = 0
 	c.wpos = 0
 	c.count = 0
 	c.digest = c.slide(c.digest, 1)
-	c.start = c.pos
 
 	// do not start a new chunk unless at least MinSize bytes have been read
 	c.pre = c.MinSize - windowSize
@@ -159,7 +126,7 @@ func (c *Chunker) reset() {
 
 // fillTables calculates out_table and mod_table for optimization. This
 // implementation uses a cache in the global variable cache.
-func (c *Chunker) fillTables() {
+func (c *BaseChunker) fillTables() {
 	// if polynomial hasn't been specified, do not compute anything for now
 	if c.pol == 0 {
 		return
@@ -212,14 +179,11 @@ func (c *Chunker) fillTables() {
 	cache.entries[c.pol] = c.tables
 }
 
-// Next returns the position and length of the next chunk of data. If an error
-// occurs while reading, the error is returned. Afterwards, the state of the
-// current chunk is undefined. When the last chunk has been returned, all
-// subsequent calls yield an io.EOF error.
-func (c *Chunker) Next(data []byte) (Chunk, error) {
-	data = data[:0]
+// NextSplitPoint returns the index before which the buf should be split
+// Returns -1 if no split point was found yet.
+func (c *BaseChunker) NextSplitPoint(buf []byte) (int, uint64) {
 	if !c.tablesInitialized {
-		return Chunk{}, errors.New("tables for polynomial computation not initialized")
+		panic("tables for polynomial computation not initialized")
 	}
 
 	tab := &c.tables
@@ -228,122 +192,57 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 	// larger than the value width. Bounding the value of polShift allows the compiler
 	// to optimize the code for 'digest >> polShift'
 	if polShift > 53-8 {
-		return Chunk{}, errors.New("the polynomial must have a degree less than or equal 53")
+		panic("the polynomial must have a degree less than or equal 53")
 	}
 	minSize := c.MinSize
 	maxSize := c.MaxSize
-	buf := c.buf
-	for {
-		if c.bpos >= c.bmax {
-			n, err := io.ReadFull(c.rd, buf[:])
 
-			if err == io.ErrUnexpectedEOF {
-				err = nil
-			}
-
-			// io.ReadFull only returns io.EOF when no bytes could be read. If
-			// this is the case and we're in this branch, there are no more
-			// bytes to buffer, so this was the last chunk. If a different
-			// error has occurred, return that error and abandon the current
-			// chunk.
-			if err == io.EOF && !c.closed {
-				c.closed = true
-
-				// return current chunk, if any bytes have been processed
-				if c.count > 0 {
-					return Chunk{
-						Start:  c.start,
-						Length: c.count,
-						Cut:    c.digest,
-						Data:   data,
-					}, nil
-				}
-			}
-
-			if err != nil {
-				return Chunk{}, err
-			}
-
-			c.bpos = 0
-			c.bmax = uint(n)
+	idx := 0
+	// check if bytes have to be dismissed before starting a new chunk
+	if c.pre > 0 {
+		if c.pre >= uint(len(buf)) {
+			c.pre -= uint(len(buf))
+			c.count += uint(len(buf))
+			return -1, 0
 		}
 
-		// check if bytes have to be dismissed before starting a new chunk
-		if c.pre > 0 {
-			n := c.bmax - c.bpos
-			if c.pre > uint(n) {
-				c.pre -= uint(n)
-				data = append(data, buf[c.bpos:c.bmax]...)
+		buf = buf[c.pre:]
+		idx = int(c.pre)
+		c.count += c.pre
+		c.pre = 0
+	}
 
-				c.count += uint(n)
-				c.pos += uint(n)
-				c.bpos = c.bmax
+	add := c.count
+	digest := c.digest
+	win := c.window
+	wpos := c.wpos
+	for i, b := range buf {
+		// slide(b)
+		// limit wpos before to elide array bound checks
+		wpos = wpos % windowSize
+		out := win[wpos]
+		win[wpos] = b
+		digest ^= uint64(tab.out[out])
+		wpos++
 
+		digest = updateDigest(digest, polShift, tab, b)
+		// end manual inline
+
+		add++
+
+		if (digest&c.splitmask) == 0 || add >= maxSize {
+			if add < minSize {
 				continue
 			}
-
-			data = append(data, buf[c.bpos:c.bpos+c.pre]...)
-
-			c.bpos += c.pre
-			c.count += c.pre
-			c.pos += c.pre
-			c.pre = 0
+			c.reset()
+			return idx + i + 1, digest
 		}
-
-		add := c.count
-		digest := c.digest
-		win := c.window
-		wpos := c.wpos
-		for _, b := range buf[c.bpos:c.bmax] {
-			// slide(b)
-			// limit wpos before to elide array bound checks
-			wpos = wpos % windowSize
-			out := win[wpos]
-			win[wpos] = b
-			digest ^= uint64(tab.out[out])
-			wpos++
-
-			digest = updateDigest(digest, polShift, tab, b)
-			// end manual inline
-
-			add++
-
-			if (digest&c.splitmask) == 0 || add >= maxSize {
-				if add < minSize {
-					continue
-				}
-
-				i := add - c.count - 1
-				data = append(data, c.buf[c.bpos:c.bpos+uint(i)+1]...)
-				c.count = add
-				c.pos += uint(i) + 1
-				c.bpos += uint(i) + 1
-				c.buf = buf
-
-				chunk := Chunk{
-					Start:  c.start,
-					Length: c.count,
-					Cut:    digest,
-					Data:   data,
-				}
-
-				c.reset()
-
-				return chunk, nil
-			}
-		}
-		c.digest = digest
-		c.window = win
-		c.wpos = wpos % windowSize
-
-		steps := c.bmax - c.bpos
-		if steps > 0 {
-			data = append(data, c.buf[c.bpos:c.bpos+steps]...)
-		}
-		c.count += steps
-		c.pos += steps
-		c.bpos = c.bmax
 	}
+	c.digest = digest
+	c.window = win
+	c.wpos = wpos % windowSize
+	c.count += uint(len(buf))
+	return -1, 0
 }
 
 func updateDigest(digest uint64, polShift uint, tab *tables, b byte) (newDigest uint64) {
@@ -355,7 +254,7 @@ func updateDigest(digest uint64, polShift uint, tab *tables, b byte) (newDigest 
 	return digest
 }
 
-func (c *Chunker) slide(digest uint64, b byte) (newDigest uint64) {
+func (c *BaseChunker) slide(digest uint64, b byte) (newDigest uint64) {
 	out := c.window[c.wpos]
 	c.window[c.wpos] = b
 	digest ^= uint64(c.tables.out[out])
@@ -370,4 +269,133 @@ func appendByte(hash Pol, b byte, pol Pol) Pol {
 	hash |= Pol(b)
 
 	return hash.Mod(pol)
+}
+
+// Chunk is one content-dependent chunk of bytes whose end was cut when the
+// Rabin Fingerprint had the value stored in Cut.
+type Chunk struct {
+	Start  uint
+	Length uint
+	Cut    uint64
+	Data   []byte
+}
+
+type chunkerBuffer struct {
+	buf  []byte
+	bpos uint
+	bmax uint
+	pos  uint
+
+	rd     io.Reader
+	closed bool
+}
+
+// Chunker splits content with Rabin Fingerprints.
+type Chunker struct {
+	BaseChunker
+	chunkerBuffer
+}
+
+// New returns a new Chunker based on polynomial p that reads from rd.
+func New(rd io.Reader, pol Pol) *Chunker {
+	return NewWithBoundaries(rd, pol, MinSize, MaxSize)
+}
+
+// NewWithBoundaries returns a new Chunker based on polynomial p that reads from
+// rd and custom min and max size boundaries.
+func NewWithBoundaries(rd io.Reader, pol Pol, min, max uint) *Chunker {
+	c := &Chunker{
+		BaseChunker: *NewBaseWithBoundaries(pol, min, max),
+		chunkerBuffer: chunkerBuffer{
+			buf: make([]byte, chunkerBufSize),
+			rd:  rd,
+		},
+	}
+
+	c.reset()
+	return c
+}
+
+// Reset reinitializes the chunker with a new reader and polynomial.
+func (c *Chunker) Reset(rd io.Reader, pol Pol) {
+	c.ResetWithBoundaries(rd, pol, MinSize, MaxSize)
+}
+
+// ResetWithBoundaries reinitializes the chunker with a new reader, polynomial
+// and custom min and max size boundaries.
+func (c *Chunker) ResetWithBoundaries(rd io.Reader, pol Pol, min, max uint) {
+	c.BaseChunker.ResetWithBoundaries(pol, min, max)
+
+	*c = Chunker{
+		BaseChunker: c.BaseChunker,
+		chunkerBuffer: chunkerBuffer{
+			buf: c.buf,
+			rd:  rd,
+		},
+	}
+
+	c.closed = false
+}
+
+// Next returns the position and length of the next chunk of data. If an error
+// occurs while reading, the error is returned. Afterwards, the state of the
+// current chunk is undefined. When the last chunk has been returned, all
+// subsequent calls yield an io.EOF error.
+func (c *Chunker) Next(data []byte) (Chunk, error) {
+	data = data[:0]
+	start := c.pos
+	for {
+		if c.bpos >= c.bmax {
+			n, err := io.ReadFull(c.rd, c.buf)
+
+			if err == io.ErrUnexpectedEOF {
+				err = nil
+			}
+
+			// io.ReadFull only returns io.EOF when no bytes could be read. If
+			// this is the case and we're in this branch, there are no more
+			// bytes to buffer, so this was the last chunk. If a different
+			// error has occurred, return that error and abandon the current
+			// chunk.
+			if err == io.EOF && !c.closed {
+				c.closed = true
+
+				// return current chunk, if any bytes have been processed
+				if len(data) > 0 {
+					return Chunk{
+						Start:  start,
+						Length: uint(len(data)),
+						// somewhat meaningless as this is not a split point
+						Cut:  c.digest,
+						Data: data,
+					}, nil
+				}
+			}
+
+			if err != nil {
+				return Chunk{}, err
+			}
+
+			c.bpos = 0
+			c.bmax = uint(n)
+		}
+
+		split, cut := c.NextSplitPoint(c.buf[c.bpos:c.bmax])
+		if split == -1 {
+			data = append(data, c.buf[c.bpos:c.bmax]...)
+			c.pos += c.bmax - c.bpos
+			c.bpos = c.bmax
+		} else {
+			data = append(data, c.buf[c.bpos:c.bpos+uint(split)]...)
+			c.bpos += uint(split)
+			c.pos += uint(split)
+
+			return Chunk{
+				Start:  start,
+				Length: uint(len(data)),
+				Cut:    cut,
+				Data:   data,
+			}, nil
+		}
+	}
 }
