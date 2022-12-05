@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"io"
 	"math/rand"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -103,6 +104,12 @@ var chunks3 = []chunk{
 	{237392, 0x0000000000000001, parseDigest("fcd567f5d866357a8e299fd5b2359bb2c8157c30395229c4e9b0a353944a7978")},
 }
 
+// the same as chunks1, but with boundaries (16*1024*1024, 32*1024*1024)
+var chunks4 = []chunk{
+	{17864181, 0x001fec043c700000, parseDigest("4a43d4eccaa3b88514f54d3becddc6ef5e06fbb2de8161b0129888dbae4430a7")},
+	{15690251, 0x0000000000000001, parseDigest("4ca32142da6f9130dc9a5d0df82a3c9e359cc4f1f480f4e52042ec0e8ecd3cc0")},
+}
+
 func testWithData(t *testing.T, chnker *Chunker, testChunks []chunk, checkDigest bool) []Chunk {
 	chunks := []Chunk{}
 
@@ -194,10 +201,10 @@ func TestChunker(t *testing.T) {
 
 func TestChunkerWithCustomAverageBits(t *testing.T) {
 	buf := getRandom(23, 32*1024*1024)
-	ch := New(bytes.NewReader(buf), testPol)
 
 	// sligthly decrease averageBits to get more chunks
-	ch.SetAverageBits(19)
+	ch := New(bytes.NewReader(buf), testPol, WithAverageBits(19))
+
 	testWithData(t, ch, chunks3, true)
 }
 
@@ -208,6 +215,27 @@ func TestChunkerReset(t *testing.T) {
 
 	ch.Reset(bytes.NewReader(buf), testPol)
 	testWithData(t, ch, chunks1, true)
+
+	// test Reset with Options
+	tmpBuf := make([]byte, 1024*1024)
+	ch.Reset(bytes.NewReader(buf), testPol, WithAverageBits(19), WithBuffer(tmpBuf))
+	testWithData(t, ch, chunks3, true)
+	if reflect.DeepEqual(tmpBuf, make([]byte, 1024*1024)) {
+		t.Fatalf("Buffer was not used")
+	}
+}
+
+// TestChunkerWithOptions tests the chunker with boundaries
+func TestChunkerWithOptions(t *testing.T) {
+	buf := getRandom(23, 32*1024*1024)
+
+	// test New with Options
+	tmpBuf := make([]byte, 1024*1024)
+	ch := New(bytes.NewReader(buf), testPol, WithBoundaries(16*1024*1024, 32*1024*1024), WithBuffer(tmpBuf))
+	testWithData(t, ch, chunks4, true)
+	if reflect.DeepEqual(tmpBuf, make([]byte, 1024*1024)) {
+		t.Fatalf("Buffer was not used")
+	}
 }
 
 func TestChunkerWithRandomPolynomial(t *testing.T) {

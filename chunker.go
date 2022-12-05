@@ -60,51 +60,28 @@ type BaseChunker struct {
 	chunkerState
 }
 
-// SetAverageBits allows to control the frequency of chunk discovery:
-// the lower averageBits, the higher amount of chunks will be identified.
-// The default value is 20 bits, so chunks will be of 1MiB size on average.
-func (c *BaseChunker) SetAverageBits(averageBits int) {
-	c.splitmask = (1 << uint64(averageBits)) - 1
-}
-
-func NewBase(pol Pol) *BaseChunker {
-	return NewBaseWithBoundaries(pol, MinSize, MaxSize)
-}
-
-func NewBaseWithBoundaries(pol Pol, min, max uint) *BaseChunker {
+func NewBase(pol Pol, opts ...baseOption) *BaseChunker {
 	c := &BaseChunker{
 		chunkerState: chunkerState{},
 		chunkerConfig: chunkerConfig{
 			pol:       pol,
-			MinSize:   min,
-			MaxSize:   max,
+			MinSize:   MinSize,
+			MaxSize:   MaxSize,
 			splitmask: (1 << 20) - 1, // aim to create chunks of 20 bits or about 1MiB on average.
 		},
+	}
+
+	for _, opt := range opts {
+		opt(c)
 	}
 
 	c.reset()
 	return c
 }
 
-// Reset reinitializes the chunker with a new reader and polynomial.
-func (c *BaseChunker) Reset(pol Pol) {
-	c.ResetWithBoundaries(pol, MinSize, MaxSize)
-}
-
-// ResetWithBoundaries reinitializes the chunker with a new reader, polynomial
-// and custom min and max size boundaries.
-func (c *BaseChunker) ResetWithBoundaries(pol Pol, min, max uint) {
-	*c = BaseChunker{
-		chunkerState: chunkerState{},
-		chunkerConfig: chunkerConfig{
-			pol:       pol,
-			MinSize:   min,
-			MaxSize:   max,
-			splitmask: (1 << 20) - 1,
-		},
-	}
-
-	c.reset()
+// Reset reinitializes the chunker with a new reader, polynomial, and options.
+func (c *BaseChunker) Reset(pol Pol, opts ...baseOption) {
+	*c = *NewBase(pol, opts...)
 }
 
 func (c *BaseChunker) reset() {
@@ -297,44 +274,54 @@ type Chunker struct {
 }
 
 // New returns a new Chunker based on polynomial p that reads from rd.
-func New(rd io.Reader, pol Pol) *Chunker {
-	return NewWithBoundaries(rd, pol, MinSize, MaxSize)
-}
-
-// NewWithBoundaries returns a new Chunker based on polynomial p that reads from
-// rd and custom min and max size boundaries.
-func NewWithBoundaries(rd io.Reader, pol Pol, min, max uint) *Chunker {
+// Chunker behavior can be customized by passing options, see With* functions.
+func New(rd io.Reader, pol Pol, opts ...option) *Chunker {
 	c := &Chunker{
-		BaseChunker: *NewBaseWithBoundaries(pol, min, max),
+		BaseChunker: *NewBase(pol),
 		chunkerBuffer: chunkerBuffer{
 			buf: make([]byte, chunkerBufSize),
 			rd:  rd,
 		},
 	}
 
+	for _, opt := range opts {
+		opt(c)
+	}
+
+	if c.buf == nil {
+		c.buf = make([]byte, chunkerBufSize)
+	}
+
 	c.reset()
 	return c
 }
 
-// Reset reinitializes the chunker with a new reader and polynomial.
-func (c *Chunker) Reset(rd io.Reader, pol Pol) {
-	c.ResetWithBoundaries(rd, pol, MinSize, MaxSize)
+// NewWithBoundaries returns a new Chunker based on polynomial p that reads from
+// rd and custom min and max size boundaries.
+//
+// Deprecated: NewWithBoundaries uses should be replaced by New(rd, pol, WithBoundaries(min, max)).
+func NewWithBoundaries(rd io.Reader, pol Pol, min, max uint) *Chunker {
+	return New(rd, pol, WithBoundaries(min, max))
 }
 
-// ResetWithBoundaries reinitializes the chunker with a new reader, polynomial
-// and custom min and max size boundaries.
+// SetAverageBits allows to control the frequency of chunk discovery:
+// the lower averageBits, the higher amount of chunks will be identified.
+// The default value is 20 bits, so chunks will be of 1MiB size on average.
+//
+// Deprecated: SetAverageBits uses should be replaced by NewBase(rd, pol, WithAverageBits(averageBits)).
+func (c *Chunker) SetAverageBits(averageBits int) {
+	c.splitmask = (1 << uint64(averageBits)) - 1
+}
+
+// Reset reinitializes the chunker with a new reader, polynomial, and options.
+func (c *Chunker) Reset(rd io.Reader, pol Pol, opts ...option) {
+	opts = append([]option{WithBuffer(c.buf)}, opts...)
+	*c = *New(rd, pol, opts...)
+}
+
+// Deprecated: ResetWithBoundaries uses should be replaced by Reset(rd, pol, WithBoundaries(min, max)).
 func (c *Chunker) ResetWithBoundaries(rd io.Reader, pol Pol, min, max uint) {
-	c.BaseChunker.ResetWithBoundaries(pol, min, max)
-
-	*c = Chunker{
-		BaseChunker: c.BaseChunker,
-		chunkerBuffer: chunkerBuffer{
-			buf: c.buf,
-			rd:  rd,
-		},
-	}
-
-	c.closed = false
+	c.Reset(rd, pol, WithBoundaries(min, max))
 }
 
 // Next returns the position and length of the next chunk of data. If an error
