@@ -11,6 +11,7 @@ const (
 
 	// WindowSize is the size of the sliding window.
 	windowSize = 64
+	windowMask = windowSize - 1
 
 	// MinSize is the default minimal size of a chunk.
 	MinSize = 512 * kiB
@@ -37,7 +38,7 @@ func init() {
 
 type chunkerState struct {
 	window [windowSize]byte
-	wpos   uint
+	wpos   uint64
 	digest uint64
 
 	pre   uint // wait for this many bytes before start calculating an new chunk
@@ -131,11 +132,9 @@ func (c *BaseChunker) fillTables() {
 	//
 	// Afterwards a new byte can be shifted in.
 	for b := 0; b < 256; b++ {
-		var h Pol
-
-		h = appendByte(h, byte(b), c.pol)
-		for i := 0; i < windowSize-1; i++ {
-			h = appendByte(h, 0, c.pol)
+		h := Pol(b)
+		for i := 1; i < windowSize; i++ {
+			h = (h << 8).Mod(c.pol)
 		}
 		c.tables.out[b] = h
 	}
@@ -194,11 +193,8 @@ func (c *BaseChunker) NextSplitPoint(buf []byte) (int, uint64) {
 	win := c.window
 	wpos := c.wpos
 	for i, b := range buf {
-		// slide(b)
-		// limit wpos before to elide array bound checks
-		wpos = wpos % windowSize
-		out := win[wpos]
-		win[wpos] = b
+		out := win[wpos&windowMask]
+		win[wpos&windowMask] = b
 		digest ^= uint64(tab.out[out])
 		wpos++
 
@@ -217,35 +213,24 @@ func (c *BaseChunker) NextSplitPoint(buf []byte) (int, uint64) {
 	}
 	c.digest = digest
 	c.window = win
-	c.wpos = wpos % windowSize
+	c.wpos = wpos
 	c.count += uint(len(buf))
 	return -1, 0
 }
 
 func updateDigest(digest uint64, polShift uint, tab *tables, b byte) (newDigest uint64) {
 	index := digest >> polShift
-	digest <<= 8
-	digest |= uint64(b)
-
-	digest ^= uint64(tab.mod[index])
-	return digest
+	digest = (digest << 8) | uint64(b)
+	return digest ^ uint64(tab.mod[index])
 }
 
 func (c *BaseChunker) slide(digest uint64, b byte) (newDigest uint64) {
-	out := c.window[c.wpos]
-	c.window[c.wpos] = b
+	out := c.window[c.wpos&windowMask]
+	c.window[c.wpos&windowMask] = b
 	digest ^= uint64(c.tables.out[out])
-	c.wpos = (c.wpos + 1) % windowSize
+	c.wpos++
 
-	digest = updateDigest(digest, c.polShift, &c.tables, b)
-	return digest
-}
-
-func appendByte(hash Pol, b byte, pol Pol) Pol {
-	hash <<= 8
-	hash |= Pol(b)
-
-	return hash.Mod(pol)
+	return updateDigest(digest, c.polShift, &c.tables, b)
 }
 
 // Chunk is one content-dependent chunk of bytes whose end was cut when the
