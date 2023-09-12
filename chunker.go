@@ -38,7 +38,7 @@ func init() {
 
 type chunkerState struct {
 	window [windowSize]byte
-	wpos   uint64
+	wpos   uint
 	digest uint64
 
 	pre   uint // wait for this many bytes before start calculating an new chunk
@@ -93,10 +93,13 @@ func (c *BaseChunker) reset() {
 		c.window[i] = 0
 	}
 
-	c.digest = 0
 	c.wpos = 0
 	c.count = 0
-	c.digest = c.slide(c.digest, 1)
+
+	// Shift a byte
+	c.window[0] = 1
+	c.digest = updateDigest(uint64(c.tables.out[0]), c.polShift, &c.tables, 1)
+	c.wpos = 1
 
 	// do not start a new chunk unless at least MinSize bytes have been read
 	c.pre = c.MinSize - windowSize
@@ -132,9 +135,11 @@ func (c *BaseChunker) fillTables() {
 	//
 	// Afterwards a new byte can be shifted in.
 	for b := 0; b < 256; b++ {
-		h := Pol(b)
-		for i := 1; i < windowSize; i++ {
-			h = (h << 8).Mod(c.pol)
+		var h Pol
+
+		h = appendByte(h, byte(b), c.pol)
+		for i := 0; i < windowSize-1; i++ {
+			h = appendByte(h, 0, c.pol)
 		}
 		c.tables.out[b] = h
 	}
@@ -220,17 +225,18 @@ func (c *BaseChunker) NextSplitPoint(buf []byte) (int, uint64) {
 
 func updateDigest(digest uint64, polShift uint, tab *tables, b byte) (newDigest uint64) {
 	index := digest >> polShift
-	digest = (digest << 8) | uint64(b)
-	return digest ^ uint64(tab.mod[index])
+	digest <<= 8
+	digest |= uint64(b)
+
+	digest ^= uint64(tab.mod[index])
+	return digest
 }
 
-func (c *BaseChunker) slide(digest uint64, b byte) (newDigest uint64) {
-	out := c.window[c.wpos&windowMask]
-	c.window[c.wpos&windowMask] = b
-	digest ^= uint64(c.tables.out[out])
-	c.wpos++
+func appendByte(hash Pol, b byte, pol Pol) Pol {
+	hash <<= 8
+	hash |= Pol(b)
 
-	return updateDigest(digest, c.polShift, &c.tables, b)
+	return hash.Mod(pol)
 }
 
 // Chunk is one content-dependent chunk of bytes whose end was cut when the

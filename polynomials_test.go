@@ -234,7 +234,7 @@ var polDivModTests = []struct {
 func TestPolDivMod(t *testing.T) {
 	for i, test := range polDivModTests {
 		q, r := test.x.DivMod(test.y)
-		if test.q != q || test.r != test.r {
+		if test.q != q || test.r != r {
 			t.Errorf("test %d failed: want (%v, %v), got (%v, %v)", i, test.q, test.r, q, r)
 		}
 	}
