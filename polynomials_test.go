@@ -39,6 +39,9 @@ var polMulTests = []struct {
 	x, y Pol
 	res  Pol
 }{
+	{0, 0, 0},
+	{0, 1, 0},
+	{1, 0, 0},
 	{1, 2, 2},
 	{
 		parseBin("1101"),
@@ -92,6 +95,14 @@ func TestPolMul(t *testing.T) {
 	}
 }
 
+func BenchmarkPolMul(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		for _, tt := range polMulTests {
+			tt.x.Mul(tt.y)
+		}
+	}
+}
+
 func TestPolMulOverflow(t *testing.T) {
 	defer func() {
 		// try to recover overflow error
@@ -111,41 +122,20 @@ func TestPolMulOverflow(t *testing.T) {
 	t.Fatal("overflow test did not panic")
 }
 
-var polDivTests = []struct {
-	x, y Pol
-	res  Pol
-}{
-	{10, 50, 0},
-	{0, 1, 0},
-	{
-		parseBin("101101000"), // 0x168
-		parseBin("1010"),      // 0xa
-		parseBin("100100"),    // 0x24
-	},
-	{2, 2, 1},
-	{
-		0x8000000000000000,
-		0x8000000000000000,
-		1,
-	},
-	{
-		parseBin("1100"),
-		parseBin("100"),
-		parseBin("11"),
-	},
-	{
-		parseBin("1100001111"),
-		parseBin("10011"),
-		parseBin("110101"),
-	},
+func TestPolDiv(t *testing.T) {
+	for i, test := range polDivModTests {
+		m := test.x.Div(test.y)
+		if test.q != m {
+			t.Errorf("TestPolDiv failed for test %d: %v / %v: want %v, got %v",
+				i, test.x, test.y, test.q, m)
+		}
+	}
 }
 
-func TestPolDiv(t *testing.T) {
-	for i, test := range polDivTests {
-		m := test.x.Div(test.y)
-		if test.res != m {
-			t.Errorf("TestPolDiv failed for test %d: %v * %v: want %v, got %v",
-				i, test.x, test.y, test.res, m)
+func BenchmarkPolDiv(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		for _, tt := range polDivModTests {
+			tt.x.Div(tt.y)
 		}
 	}
 }
@@ -169,71 +159,6 @@ func TestPolDeg(t *testing.T) {
 	}
 }
 
-var polModTests = []struct {
-	x, y Pol
-	res  Pol
-}{
-	{10, 50, 10},
-	{0, 1, 0},
-	{
-		parseBin("101101001"),
-		parseBin("1010"),
-		parseBin("1"),
-	},
-	{2, 2, 0},
-	{
-		0x8000000000000000,
-		0x8000000000000000,
-		0,
-	},
-	{
-		parseBin("1100"),
-		parseBin("100"),
-		parseBin("0"),
-	},
-	{
-		parseBin("1100001111"),
-		parseBin("10011"),
-		parseBin("0"),
-	},
-}
-
-func TestPolModt(t *testing.T) {
-	for i, test := range polModTests {
-		res := test.x.Mod(test.y)
-		if test.res != res {
-			t.Errorf("test %d failed: want %v, got %v", i, test.res, res)
-		}
-	}
-}
-
-func BenchmarkPolDivMod(t *testing.B) {
-	f := Pol(0x2482734cacca49)
-	g := Pol(0x3af4b284899)
-
-	for i := 0; i < t.N; i++ {
-		g.DivMod(f)
-	}
-}
-
-func BenchmarkPolDiv(t *testing.B) {
-	f := Pol(0x2482734cacca49)
-	g := Pol(0x3af4b284899)
-
-	for i := 0; i < t.N; i++ {
-		g.Div(f)
-	}
-}
-
-func BenchmarkPolMod(t *testing.B) {
-	f := Pol(0x2482734cacca49)
-	g := Pol(0x3af4b284899)
-
-	for i := 0; i < t.N; i++ {
-		g.Mod(f)
-	}
-}
-
 func BenchmarkPolDeg(t *testing.B) {
 	f := Pol(0x3af4b284899)
 	d := f.Deg()
@@ -248,6 +173,79 @@ func BenchmarkPolDeg(t *testing.B) {
 	}
 	// Make sure Deg call isn't optimized away.
 	t.Log("sum of Deg:", sum)
+}
+
+func TestPolMod(t *testing.T) {
+	for i, test := range polDivModTests {
+		res := test.x.Mod(test.y)
+		if test.r != res {
+			t.Errorf("test %d failed: want %v, got %v", i, test.r, res)
+		}
+	}
+}
+
+func BenchmarkPolMod(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		for _, tt := range polDivModTests {
+			tt.x.Mod(tt.y)
+		}
+	}
+}
+
+var polDivModTests = []struct {
+	x, y Pol
+	q, r Pol
+}{
+	{10, 50, 0, 10},
+	{0, 1, 0, 0},
+	{
+		parseBin("101101000"), // 0x168
+		parseBin("1010"),      // 0xa
+		parseBin("100100"),    // 0x24
+		parseBin("0"),         // 0
+	},
+	{2, 2, 1, 0},
+	{
+		0x8000000000000000,
+		0x8000000000000000,
+		1,
+		0,
+	},
+	{
+		parseBin("1100"),
+		parseBin("100"),
+		parseBin("11"),
+		parseBin("0"),
+	},
+	{
+		parseBin("1100001111"),
+		parseBin("10011"),
+		parseBin("110101"),
+		parseBin("0"),
+	},
+	{
+		0x2482734cacca49,
+		0x3af4b284899,
+		0x1972,
+		0x4229e6268b,
+	},
+}
+
+func TestPolDivMod(t *testing.T) {
+	for i, test := range polDivModTests {
+		q, r := test.x.DivMod(test.y)
+		if test.q != q || test.r != r {
+			t.Errorf("test %d failed: want (%v, %v), got (%v, %v)", i, test.q, test.r, q, r)
+		}
+	}
+}
+
+func BenchmarkPolDivMod(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		for _, tt := range polDivModTests {
+			tt.x.DivMod(tt.y)
+		}
+	}
 }
 
 func TestRandomPolynomial(t *testing.T) {
@@ -396,12 +394,23 @@ func TestPolGCD(t *testing.T) {
 	}
 }
 
+func BenchmarkPolGCD(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		for _, tt := range polGCDTests {
+			tt.f1.GCD(tt.f2)
+		}
+	}
+}
+
 var polMulModTests = []struct {
 	f1  Pol
 	f2  Pol
 	g   Pol
 	mod Pol
 }{
+	{0, 0, 0x11111, 0},
+	{0, 1, 0x11111, 0},
+	{1, 0, 0x11111, 0},
 	{
 		0x1230,
 		0x230,
@@ -422,6 +431,14 @@ func TestPolMulMod(t *testing.T) {
 		if mod != test.mod {
 			t.Errorf("MulMod test %d (%+v) failed: got %v, wanted %v",
 				i, test, mod, test.mod)
+		}
+	}
+}
+
+func BenchmarkPolMulMod(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		for _, tt := range polMulModTests {
+			tt.f1.MulMod(tt.f2, tt.g)
 		}
 	}
 }
