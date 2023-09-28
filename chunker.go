@@ -92,10 +92,12 @@ func (c *BaseChunker) reset() {
 		c.window[i] = 0
 	}
 
-	c.digest = 0
-	c.wpos = 0
 	c.count = 0
-	c.digest = c.slide(c.digest, 1)
+
+	// slide in a byte
+	c.window[0] = 1
+	c.digest = updateDigest(uint64(c.tables.out[0]), c.polShift, &c.tables, 1)
+	c.wpos = 1
 
 	// do not start a new chunk unless at least MinSize bytes have been read
 	c.pre = c.MinSize - windowSize
@@ -194,11 +196,8 @@ func (c *BaseChunker) NextSplitPoint(buf []byte) (int, uint64) {
 	win := c.window
 	wpos := c.wpos
 	for i, b := range buf {
-		// slide(b)
-		// limit wpos before to elide array bound checks
-		wpos = wpos % windowSize
-		out := win[wpos]
-		win[wpos] = b
+		out := win[wpos%windowSize]
+		win[wpos%windowSize] = b
 		digest ^= uint64(tab.out[out])
 		wpos++
 
@@ -228,16 +227,6 @@ func updateDigest(digest uint64, polShift uint, tab *tables, b byte) (newDigest 
 	digest |= uint64(b)
 
 	digest ^= uint64(tab.mod[index])
-	return digest
-}
-
-func (c *BaseChunker) slide(digest uint64, b byte) (newDigest uint64) {
-	out := c.window[c.wpos]
-	c.window[c.wpos] = b
-	digest ^= uint64(c.tables.out[out])
-	c.wpos = (c.wpos + 1) % windowSize
-
-	digest = updateDigest(digest, c.polShift, &c.tables, b)
 	return digest
 }
 
