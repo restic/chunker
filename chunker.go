@@ -194,11 +194,9 @@ func (c *BaseChunker) NextSplitPoint(buf []byte) (int, uint64) {
 	win := c.window
 	wpos := c.wpos
 	for i, b := range buf {
-		// slide(b)
-		// limit wpos before to elide array bound checks
-		wpos = wpos % windowSize
-		out := win[wpos]
-		win[wpos] = b
+		// limit wpos to elide array bound checks
+		out := win[wpos%windowSize]
+		win[wpos%windowSize] = b
 		digest ^= uint64(tab.out[out])
 		wpos++
 
