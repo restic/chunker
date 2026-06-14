@@ -156,9 +156,16 @@ func (c *BaseChunker) fillTables() {
 	cache.entries[c.pol] = c.tables
 }
 
-// NextSplitPoint returns the index before which the buf should be split
-// Returns -1 if no split point was found yet.
-func (c *BaseChunker) NextSplitPoint(buf []byte) (int, uint64) {
+// NextSplitPoint scans buf for a chunk boundary.
+// Returns index before which to split buf, or -1 if no boundary found in this buffer.
+// This operation is stateful. All buffers passed to it until a split point is found
+// then form a single chunk.
+func (c *BaseChunker) NextSplitPoint(buf []byte) int {
+	split, _ := c.nextSplitPoint(buf)
+	return split
+}
+
+func (c *BaseChunker) nextSplitPoint(buf []byte) (int, uint64) {
 	if !c.tablesInitialized {
 		panic("tables for polynomial computation not initialized")
 	}
@@ -365,7 +372,7 @@ func (c *Chunker) Next(data []byte) (Chunk, error) {
 			c.bmax = uint(n)
 		}
 
-		split, cut := c.NextSplitPoint(c.buf[c.bpos:c.bmax])
+		split, cut := c.nextSplitPoint(c.buf[c.bpos:c.bmax])
 		if split == -1 {
 			data = append(data, c.buf[c.bpos:c.bmax]...)
 			c.pos += c.bmax - c.bpos
