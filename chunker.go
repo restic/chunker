@@ -313,7 +313,7 @@ func NewWithBoundaries(rd io.Reader, pol Pol, min, max uint) *Chunker {
 // the lower averageBits, the higher amount of chunks will be identified.
 // The default value is 20 bits, so chunks will be of 1MiB size on average.
 //
-// Deprecated: SetAverageBits uses should be replaced by NewBase(rd, pol, WithAverageBits(averageBits)).
+// Deprecated: SetAverageBits uses should be replaced by New(rd, pol, WithAverageBits(averageBits)).
 func (c *Chunker) SetAverageBits(averageBits int) {
 	c.splitmask = (1 << uint64(averageBits)) - 1
 }
