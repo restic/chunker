@@ -20,38 +20,29 @@ func (x Pol) Add(y Pol) Pol {
 }
 
 // Mul returns x*y. When an overflow occurs, Mul panics.
-func (x Pol) Mul(y Pol) Pol {
-	switch {
-	case x == 0 || y == 0:
-		return 0
-	case x == 1:
-		return y
-	case y == 1:
-		return x
-	case y == 2:
-		return x.mul2()
+func (x Pol) Mul(y Pol) (p Pol) {
+	if x == 0 || y == 0 {
+		return
 	}
 
-	var res Pol
+	if y&(y-1) == 0 {
+		if x.Deg()+y.Deg() >= 64 {
+			panic("multiplication would overflow uint64")
+		}
+		return x << uint(y.Deg())
+	}
+
 	for i := 0; i <= y.Deg(); i++ {
-		if (y & (1 << uint(i))) > 0 {
-			res = res.Add(x << uint(i))
+		if (y & (1 << uint(i))) != 0 {
+			p = p.Add(x << uint(i))
 		}
 	}
 
-	if res.Div(y) != x {
+	if p.Div(y) != x {
 		panic("multiplication would overflow uint64")
 	}
 
-	return res
-}
-
-// 2*x.
-func (x Pol) mul2() Pol {
-	if x&(1<<63) != 0 {
-		panic("multiplication would overflow uint64")
-	}
-	return x << 1
+	return p
 }
 
 // Deg returns the degree of the polynomial x. If x is zero, -1 is returned.
@@ -90,31 +81,31 @@ func (x Pol) Expand() string {
 
 // DivMod returns x / d = q, and remainder r,
 // see https://en.wikipedia.org/wiki/Division_algorithm
-func (x Pol) DivMod(d Pol) (Pol, Pol) {
+func (x Pol) DivMod(d Pol) (q Pol, r Pol) {
 	if x == 0 {
-		return 0, 0
+		return q, r
 	}
 
 	if d == 0 {
 		panic("division by zero")
 	}
 
+	r = x
 	D := d.Deg()
 	diff := x.Deg() - D
 	if diff < 0 {
-		return 0, x
+		return q, r
 	}
 
-	var q Pol
 	for diff >= 0 {
 		m := d << uint(diff)
-		q |= (1 << uint(diff))
-		x = x.Add(m)
+		q |= 1 << uint(diff)
+		r = r.Add(m)
 
-		diff = x.Deg() - D
+		diff = r.Deg() - D
 	}
 
-	return q, x
+	return q, r
 }
 
 // Div returns the integer division result x / d.
@@ -182,14 +173,6 @@ func (x Pol) GCD(f Pol) Pol {
 		return x
 	}
 
-	if x == 0 {
-		return f
-	}
-
-	if x.Deg() < f.Deg() {
-		x, f = f, x
-	}
-
 	return f.GCD(x.Mod(f))
 }
 
@@ -200,7 +183,8 @@ func (x Pol) GCD(f Pol) Pol {
 // Finite Fields".
 func (x Pol) Irreducible() bool {
 	for i := 1; i <= x.Deg()/2; i++ {
-		if x.GCD(qp(uint(i), x)) != 1 {
+		// computes the polynomial (x^(2^p)-x) mod g
+		if x.GCD(Pol(4).PowMod(1<<uint(i), x).Add(2)) != 1 {
 			return false
 		}
 	}
@@ -209,42 +193,26 @@ func (x Pol) Irreducible() bool {
 }
 
 // MulMod computes x*f mod g
-func (x Pol) MulMod(f, g Pol) Pol {
-	if x == 0 || f == 0 {
-		return 0
-	}
-
-	var res Pol
-	for i := 0; i <= f.Deg(); i++ {
-		if (f & (1 << uint(i))) > 0 {
-			a := x
-			for j := 0; j < i; j++ {
-				a = a.Mul(2).Mod(g)
-			}
-			res = res.Add(a).Mod(g)
+func (x Pol) MulMod(f, g Pol) (r Pol) {
+	for b := x; b != 0 && f != 0; f >>= 1 {
+		if f&1 != 0 {
+			r = r.Add(b).Mod(g)
 		}
+		b = (b << 1).Mod(g) // f'(x) = f(x) * x
 	}
-
-	return res
+	return
 }
 
-// qp computes the polynomial (x^(2^p)-x) mod g. This is needed for the
-// reducibility test.
-func qp(p uint, g Pol) Pol {
-	num := (1 << p)
-	i := 1
-
-	// start with x
-	res := Pol(2)
-
-	for i < num {
-		// repeatedly square res
-		res = res.MulMod(res, g)
-		i *= 2
+// PowMod computes x^n mod g. This is needed for the reducibility test.
+func (x Pol) PowMod(n uint, g Pol) (r Pol) {
+	var b Pol
+	for b, r = x, 1; n != 0; n >>= 1 {
+		if n&1 != 0 {
+			r = r.MulMod(b, g)
+		}
+		b = b.MulMod(b, g)
 	}
-
-	// add x
-	return res.Add(2).Mod(g)
+	return
 }
 
 // MarshalJSON returns the JSON representation of the Pol.
